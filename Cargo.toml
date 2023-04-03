@@ -7,6 +7,9 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 bevy = "0.10"
 bevy_mod_picking = "*"
+rand = { version = "*", features = ["small_rng"] }
+rand_chacha = "*"
+bevy_pancam = "*"
 
 # Enable a small amount of optimization in debug mode
 [profile.dev]
