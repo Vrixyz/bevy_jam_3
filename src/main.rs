@@ -16,6 +16,7 @@ use bevy_mod_picking::{
     PickingEvent,
 };
 use bevy_pancam::{PanCam, PanCamPlugin};
+use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 use poisson::Poisson;
 use progress::Progress;
 use rand::{thread_rng, Rng, SeedableRng};
@@ -31,17 +32,21 @@ fn main() {
         .add_plugins(DefaultPickingPlugins) // <- Adds picking, interaction, and highlighting
         //.add_plugin(DebugEventsPickingPlugin) // <- Adds debug event logging.
         .add_plugin(PanCamPlugin::default())
-        .add_event::<CurrencyGainEvent>()
+        .add_plugin(DebugLinesPlugin::default())
+        .add_event::<NewNodeEvent>()
+        .add_event::<PropagateResetManualButtons>()
         .init_resource::<Currency>()
         .add_startup_system(setup)
         .add_system(update_progress_timer)
         .add_system(update_progress_manual_auto_block)
         .add_system(button_react)
+        .add_system(reset_manual_button_timers.after(button_react))
         .add_system(button_manual_toggle_block_react)
         .add_system(new_button)
         .add_system(check_self_block)
         .add_system(update_inherited_block_status.after(check_self_block))
         .add_system(update_progress_text.after(update_inherited_block_status))
+        .add_system(draw_relations.before(new_button))
         .run();
 }
 
@@ -173,10 +178,15 @@ fn update_progress_timer(
         }
     }
 }
-fn update_progress_manual_auto_block(mut q_timer: Query<(&Progress, &mut NodeManualBlockToggle)>) {
-    for (t, mut status) in q_timer.iter_mut() {
+fn update_progress_manual_auto_block(
+    currencies: Res<Currency>,
+    mut events_writer: EventWriter<NewNodeEvent>,
+    mut q_timer: Query<(Entity, &Progress, &mut NodeManualBlockToggle)>,
+) {
+    for (e, t, mut status) in q_timer.iter_mut() {
         if t.timer.just_finished() {
             status.is_blocked = true;
+            events_writer.send(NewNodeEvent((e, currencies.value)));
         }
     }
 }
@@ -224,7 +234,8 @@ struct Currency {
 }
 fn button_react(
     mut events: EventReader<PickingEvent>,
-    mut events_writer: EventWriter<CurrencyGainEvent>,
+    mut events_writer: EventWriter<NewNodeEvent>,
+    mut events_reset_writer: EventWriter<PropagateResetManualButtons>,
     mut q_timer: Query<(&mut Progress, &InheritedBlockStatus), With<NodeCurrencyGain>>,
     mut currencies: ResMut<Currency>,
 ) {
@@ -241,7 +252,8 @@ fn button_react(
                 p.timer
                     .set_duration(Duration::from_secs_f32(new_time_duration));
                 p.timer.reset();
-                events_writer.send(CurrencyGainEvent((*e, currencies.value)));
+                events_writer.send(NewNodeEvent((*e, currencies.value)));
+                events_reset_writer.send(PropagateResetManualButtons(*e));
             } else {
                 dbg!("NOT READY");
             }
@@ -278,7 +290,7 @@ fn check_self_block(
     }
 }
 
-struct CurrencyGainEvent(pub (Entity, f32));
+struct NewNodeEvent(pub (Entity, f32));
 
 #[derive(Resource)]
 pub struct RandomForMap {
@@ -300,7 +312,7 @@ fn new_button(
     mut commands: Commands,
     map_assets: Res<MapAssets>,
     mut random_map: ResMut<RandomForMap>,
-    mut events: EventReader<CurrencyGainEvent>,
+    mut events: EventReader<NewNodeEvent>,
     q_nodes: Query<(&Transform, Entity), With<BaseNode>>,
     mut q_blockers: Query<(&mut Blockers, Entity), With<BaseNode>>,
     currencies: Res<Currency>,
@@ -331,13 +343,21 @@ fn new_button(
         ) {
             None => {}
             Some(pos) => {
+                let mut random_number = random_map.random.gen::<u32>() % 100;
+                if random_number < 25 {
+                    continue;
+                }
+                random_number -= 25;
+
+                // 75 weight left
+
                 let node = create_node(
                     &mut commands,
                     &map_assets,
                     Vec2::new(pos.0, pos.1),
                     event.0 .1 * 2f32,
                 );
-                if (currencies.value as i32) % 2 == 0 {
+                if random_number < 40 {
                     commands
                         .entity(node)
                         .insert(NodeManualBlockToggle { is_blocked: false })
@@ -368,7 +388,6 @@ fn new_button(
                         entities: vec![node],
                     });
                 }
-                break;
             }
         }
     }
@@ -383,10 +402,9 @@ fn update_inherited_block_status(
     for (mut inherited_status, _) in q_blockStatus.iter_mut() {
         inherited_status.is_blocked = false;
     }
-    let is_blocked = false;
     for (blockers, to_blocks, e) in q_blockers.iter() {
         if blockers.entities.is_empty() {
-            recurse_block(&q_blockers, &mut q_blockStatus, e, is_blocked, to_blocks);
+            recurse_block(&q_blockers, &mut q_blockStatus, e, false, to_blocks);
         }
     }
 }
@@ -408,11 +426,95 @@ fn recurse_block(
     if is_blocked || self_status.is_blocked {
         inherited_status.is_blocked = true;
     }
-    let status = self_status.is_blocked;
+    let status = inherited_status.is_blocked;
     for to_block in to_blocks.entities.iter() {
         let blockers = q_blockers
             .get(*to_block)
             .expect("blocker cannot be destroyed");
         recurse_block(q_blockers, q_block_status, *to_block, status, blockers.1);
+    }
+}
+
+pub struct PropagateResetManualButtons(pub Entity);
+
+fn reset_manual_button_timers(
+    currencies: Res<Currency>,
+    mut events: EventReader<PropagateResetManualButtons>,
+    mut q_blockers: Query<(&Blockers, Entity), With<BaseNode>>,
+    mut q_manual_node: Query<(&mut NodeManualBlockToggle, &mut Progress), With<BaseNode>>,
+) {
+    for e in events.iter() {
+        recurse_reset_manual(&e.0, &currencies, &mut q_manual_node, &q_blockers);
+    }
+}
+
+fn recurse_reset_manual(
+    e: &Entity,
+    currencies: &Res<Currency>,
+    q_manual_node: &mut Query<(&mut NodeManualBlockToggle, &mut Progress), With<BaseNode>>,
+    q_blockers: &Query<(&Blockers, Entity), With<BaseNode>>,
+) {
+    if let Ok((mut manual, mut progress)) = q_manual_node.get_mut(*e) {
+        manual.is_blocked = true;
+        progress
+            .timer
+            .set_duration(Duration::from_secs_f32(currencies.value));
+        progress.timer.reset();
+    }
+    let Ok(blockers) = q_blockers.get(*e) else {
+        return;
+    };
+    for child in blockers.0.entities.iter() {
+        recurse_reset_manual(child, currencies, q_manual_node, q_blockers);
+    }
+}
+
+fn draw_relations(
+    mut commands: Commands,
+    mut lines: ResMut<DebugLines>,
+    map_assets: Res<MapAssets>,
+    mut q_to_block: Query<(&ToBlock, Entity), With<BaseNode>>,
+    mut q_blockers: Query<(&Transform, &Blockers, Entity), With<BaseNode>>,
+    mut q_blockStatus: Query<(&Transform, &InheritedBlockStatus, &SelfBlockStatus), With<BaseNode>>,
+) {
+    for (to_blocks, e) in q_to_block.iter() {
+        if to_blocks.entities.is_empty() {
+            recurse_draw_relations(&mut lines, &q_blockers, &q_blockStatus, e);
+        }
+    }
+}
+
+fn recurse_draw_relations(
+    mut lines: &mut ResMut<DebugLines>,
+    q_blockers: &Query<(&Transform, &Blockers, Entity), With<BaseNode>>,
+    q_block_status: &Query<(&Transform, &InheritedBlockStatus, &SelfBlockStatus), With<BaseNode>>,
+    e: Entity,
+) {
+    let (t, mut inherited_status, self_status) = q_block_status
+        .get(e)
+        .expect("all nodes should have a status");
+
+    let status = inherited_status.is_blocked;
+    if let Ok(blockers) = q_blockers.get(e) {
+        for new_blocker in blockers.1.entities.iter() {
+            dbg!("line");
+            dbg!(t.translation);
+            dbg!(blockers.0.translation);
+            lines.line_colored(
+                t.translation,
+                q_blockers
+                    .get(*new_blocker)
+                    .expect("all nodes have a transform")
+                    .0
+                    .translation,
+                0f32,
+                if inherited_status.is_blocked || self_status.is_blocked {
+                    Color::RED
+                } else {
+                    Color::GREEN
+                },
+            );
+            recurse_draw_relations(lines, q_blockers, q_block_status, *new_blocker);
+        }
     }
 }

@@ -10,6 +10,7 @@ bevy_mod_picking = "*"
 rand = { version = "*", features = ["small_rng"] }
 rand_chacha = "*"
 bevy_pancam = "*"
+bevy_prototype_debug_lines = "*"
 
 # Enable a small amount of optimization in debug mode
 [profile.dev]
