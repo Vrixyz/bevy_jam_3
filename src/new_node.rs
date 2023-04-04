@@ -8,6 +8,10 @@ use rand_chacha::ChaCha20Rng;
 
 use crate::*;
 
+pub const TIMER_BLOCKER_MULT: f32 = 0.45f32;
+pub const TIMER_RESET_BLOCKER_FIXED: f32 = 0.5f32;
+pub const TIMER_GAIN_MULT: f32 = 2.5f32;
+
 pub struct NewNodeEvent(pub (Entity, i32));
 
 #[derive(Component)]
@@ -99,20 +103,21 @@ pub fn new_button(
             None => {}
             Some(pos) => {
                 let mut random_number = random_map.random.gen::<u32>() % 100;
-                if random_number < 25 {
+                let chance_to_no_room = 30;
+                if random_number < chance_to_no_room {
                     continue;
                 }
-                random_number -= 25;
+                random_number -= chance_to_no_room;
                 existing_points.push(pos);
-                // 75 weight left
+                // 70 weight left
 
-                let node = if random_number < 40 {
+                let node = if random_number < 45 {
                     let node = create_node(
                         &mut commands,
                         map_assets.mesh_blocker.clone(),
                         &map_assets,
                         Vec2::new(pos.0, pos.1),
-                        event.0 .1 as f32 * 0.4f32,
+                        event.0 .1 as f32 * TIMER_BLOCKER_MULT,
                     );
                     commands
                         .entity(node)
@@ -136,7 +141,7 @@ pub fn new_button(
                         map_assets.mesh_gain.clone(),
                         &map_assets,
                         Vec2::new(pos.0, pos.1),
-                        event.0 .1 as f32 * 1.5f32,
+                        event.0 .1 as f32 * TIMER_GAIN_MULT,
                     );
                     commands.entity(node).insert(NodeCurrencyGain);
                     node

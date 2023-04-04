@@ -254,7 +254,7 @@ fn button_react(
                 dbg!("GAIN!");
                 currencies.amount += 1;
                 let new_time_duration = p.timer.duration().as_secs_f32() + currencies.amount as f32;
-                let new_time_duration = currencies.amount as f32 * 1.5f32;
+                let new_time_duration = currencies.amount as f32 * TIMER_GAIN_MULT;
                 p.timer
                     .set_duration(Duration::from_secs_f32(new_time_duration));
                 p.timer.reset();
@@ -381,7 +381,7 @@ fn recurse_reset_manual(
         self_status.is_blocked = true;
         progress
             .timer
-            .set_duration(Duration::from_secs_f32(currencies.amount as f32 * 0.4f32));
+            .set_duration(Duration::from_secs_f32(TIMER_RESET_BLOCKER_FIXED));
         progress.timer.reset();
     }
     let Ok(blockers) = q_blockers.get(*e) else {
@@ -428,7 +428,7 @@ fn recurse_draw_relations(
                     .0
                     .translation,
                 0f32,
-                if inherited_status.is_blocked || self_status.is_blocked {
+                if inherited_status.is_blocked {
                     Color::RED
                 } else {
                     Color::GREEN
