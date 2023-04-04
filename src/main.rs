@@ -81,6 +81,7 @@ pub struct NodeCurrencyGain;
 pub struct Blockers {
     pub entities: Vec<Entity>,
 }
+
 /// To know which nodes to block.
 #[derive(Component)]
 pub struct ToBlock {
@@ -102,6 +103,8 @@ pub struct MapAssets {
     pub text_style: TextStyle,
     pub mesh_gain: Mesh2dHandle,
     pub mesh_blocker: Mesh2dHandle,
+    pub eye_catcher_mesh: Mesh2dHandle,
+    pub eye_catcher_material: Handle<ColorMaterial>,
     pub node_materials_normal: Highlighting<ColorMaterial>,
     pub node_materials_blocked: Highlighting<ColorMaterial>,
 }
@@ -133,6 +136,10 @@ fn setup(
         },
         mesh_gain: meshes.add(Mesh::from(shape::Circle::default())).into(),
         mesh_blocker: meshes.add(Mesh::from(shape::Quad::default())).into(),
+        eye_catcher_mesh: meshes
+            .add(Mesh::from(shape::RegularPolygon::new(0.5f32, 6)))
+            .into(),
+        eye_catcher_material: materials.add(ColorMaterial::from(Color::YELLOW_GREEN)),
         node_materials_normal: Highlighting {
             initial: mat_initial.clone(),
             hovered: Some(materials.add(ColorMaterial::from(Color::GRAY))),

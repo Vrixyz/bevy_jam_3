@@ -17,7 +17,7 @@ pub fn update_status_visual(
     )>,
 ) {
     for (self_status, p, inherited_status, mut highlighting, mut selection) in q_status.iter_mut() {
-        if p.timer.finished() == false || inherited_status.is_blocked {
+        if !p.timer.finished() || inherited_status.is_blocked {
             if highlighting.pressed != map_assets.node_materials_blocked.pressed {
                 highlighting.apply(&map_assets.node_materials_blocked);
                 selection.as_mut();

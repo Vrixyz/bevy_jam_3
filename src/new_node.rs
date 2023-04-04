@@ -40,11 +40,19 @@ pub(super) fn create_node(
     pos: Vec2,
     duration: f32,
 ) -> Entity {
+    let eye_catcher = commands.spawn((MaterialMesh2dBundle {
+        mesh: map_assets.eye_catcher_mesh.clone(),
+        transform: Transform::default()
+            .with_translation(pos.extend(0f32))
+            .with_scale(Vec3::splat(160.)),
+        material: map_assets.eye_catcher_material.clone(),
+        ..default()
+    },));
     let ent = commands.spawn((
         MaterialMesh2dBundle {
             mesh: mesh.clone(),
             transform: Transform::default()
-                .with_translation(pos.extend(0f32))
+                .with_translation(pos.extend(1f32))
                 .with_scale(Vec3::splat(128.)),
             material: map_assets.node_materials_normal.initial.clone(),
             ..default()
@@ -152,7 +160,7 @@ pub fn new_button(
                         text: Text::from_section("", map_assets.text_style.clone())
                             .with_alignment(TextAlignment::Center),
                         transform: Transform::default()
-                            .with_translation(Vec2::new(pos.0, pos.1).extend(1f32)),
+                            .with_translation(Vec2::new(pos.0, pos.1).extend(10f32)),
                         ..default()
                     },
                     ButtonRef(node),

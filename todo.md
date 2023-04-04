@@ -1,4 +1,3 @@
-- fix link red
 - background (diamond?) for inherited state
   - red when inherited is blocked
   - green when inherited is not blocked
