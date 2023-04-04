@@ -1,0 +1,4 @@
+- finish implementing different highlight depending on inherited + self blocked state
+- background (diamond?) for inherited state
+  - red when inherited is blocked
+  - green when inherited is not blocked

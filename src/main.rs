@@ -12,8 +12,8 @@ use bevy::{
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
 };
 use bevy_mod_picking::{
-    DebugEventsPickingPlugin, DefaultPickingPlugins, PickableBundle, PickingCameraBundle,
-    PickingEvent,
+    DebugEventsPickingPlugin, DefaultPickingPlugins, Highlighting, PickableBundle,
+    PickingCameraBundle, PickingEvent,
 };
 use bevy_pancam::{PanCam, PanCamPlugin};
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
@@ -90,8 +90,10 @@ pub struct SelfBlockStatus {
 pub struct MapAssets {
     pub font: Handle<Font>,
     pub text_style: TextStyle,
-    pub mesh: Mesh2dHandle,
-    pub material: Handle<ColorMaterial>,
+    pub mesh_gain: Mesh2dHandle,
+    pub mesh_blocker: Mesh2dHandle,
+    pub node_materials_normal: Highlighting<ColorMaterial>,
+    pub node_materials_blocked: Highlighting<ColorMaterial>,
 }
 
 fn setup(
@@ -110,18 +112,38 @@ fn setup(
     ));
 
     let font = asset_server.load("fonts/FiraSans-Bold.ttf");
+    let mat_initial = materials.add(ColorMaterial::from(Color::WHITE));
+    let mat_initial_blocked = materials.add(ColorMaterial::from(Color::ANTIQUE_WHITE));
     let map_assets = MapAssets {
         font: font.clone(),
         text_style: TextStyle {
             font,
             font_size: 30.0,
-            color: Color::WHITE,
+            color: Color::BLACK,
         },
-        mesh: meshes.add(Mesh::from(shape::Quad::default())).into(),
-        material: materials.add(ColorMaterial::from(Color::PURPLE)),
+        mesh_gain: meshes.add(Mesh::from(shape::Circle::default())).into(),
+        mesh_blocker: meshes.add(Mesh::from(shape::Quad::default())).into(),
+        node_materials_normal: Highlighting {
+            initial: mat_initial.clone(),
+            hovered: Some(materials.add(ColorMaterial::from(Color::GRAY))),
+            pressed: Some(materials.add(ColorMaterial::from(Color::GREEN))),
+            selected: Some(mat_initial.clone()),
+        },
+        node_materials_blocked: Highlighting {
+            initial: mat_initial_blocked.clone(),
+            hovered: Some(materials.add(ColorMaterial::from(Color::DARK_GRAY))),
+            pressed: Some(materials.add(ColorMaterial::from(Color::DARK_GREEN))),
+            selected: Some(mat_initial_blocked.clone()),
+        },
     };
 
-    let button_entity = create_node(&mut commands, &map_assets, Vec2::ZERO, currencies.value);
+    let button_entity = create_node(
+        &mut commands,
+        map_assets.mesh_gain.clone(),
+        &map_assets,
+        Vec2::ZERO,
+        currencies.value,
+    );
     commands.entity(button_entity).insert(NodeCurrencyGain);
     commands.spawn((
         Text2dBundle {
@@ -138,17 +160,18 @@ fn setup(
 
 fn create_node(
     commands: &mut Commands,
+    mesh: Mesh2dHandle,
     map_assets: &MapAssets,
     pos: Vec2,
     duration: f32,
 ) -> Entity {
     let ent = commands.spawn((
         MaterialMesh2dBundle {
-            mesh: map_assets.mesh.clone(),
+            mesh: mesh.clone(),
             transform: Transform::default()
                 .with_translation(pos.extend(0f32))
                 .with_scale(Vec3::splat(128.)),
-            material: map_assets.material.clone(),
+            material: map_assets.node_materials_normal.initial.clone(),
             ..default()
         },
         PickableBundle::default(),
@@ -160,6 +183,7 @@ fn create_node(
         SelfBlockStatus { is_blocked: false },
         Blockers { entities: vec![] },
         ToBlock { entities: vec![] },
+        map_assets.node_materials_normal.clone(),
     ));
     ent.id()
 }
@@ -173,9 +197,14 @@ fn update_progress_timer(
     )>,
 ) {
     for (mut t, status, manual) in q_timer.iter_mut() {
-        if !status.is_blocked || manual.is_some() {
-            t.timer.tick(time.delta());
+        if let Some(manual) = manual {
+            if manual.is_blocked && status.is_blocked {
+                continue;
+            }
+        } else if status.is_blocked {
+            continue;
         }
+        t.timer.tick(time.delta());
     }
 }
 fn update_progress_manual_auto_block(
@@ -197,6 +226,7 @@ fn update_progress_text(
         (
             &Progress,
             &InheritedBlockStatus,
+            &SelfBlockStatus,
             Option<&NodeManualBlockToggle>,
         ),
         Or<(Changed<Progress>, Changed<InheritedBlockStatus>)>,
@@ -205,11 +235,11 @@ fn update_progress_text(
     for (mut t, b) in q_texts.iter_mut() {
         match q_timer.get(b.0) {
             Err(_) => {}
-            Ok((p, status, manual_toggle)) => {
+            Ok((p, status, self_status, manual_toggle)) => {
                 let block_status = if status.is_blocked { " (blocked)" } else { "" };
                 if p.timer.finished() {
                     let text = if manual_toggle.is_some() {
-                        if status.is_blocked {
+                        if self_status.is_blocked {
                             "Unblock"
                         } else {
                             "Block"
@@ -263,13 +293,17 @@ fn button_react(
 
 fn button_manual_toggle_block_react(
     mut events: EventReader<PickingEvent>,
-    mut q_nodes: Query<(&Progress, &mut NodeManualBlockToggle)>,
+    mut q_nodes: Query<(&Progress, &mut NodeManualBlockToggle, &InheritedBlockStatus)>,
 ) {
     for event in events.iter() {
         if let PickingEvent::Clicked(e) = event {
-            let Ok((p, mut node)) = q_nodes.get_mut(*e) else {
+            let Ok((p, mut node, status)) = q_nodes.get_mut(*e) else {
                 continue;
             };
+            if status.is_blocked {
+                dbg!("node is blocked");
+                continue;
+            }
             if p.timer.finished() {
                 dbg!("toggle block!");
                 node.is_blocked = !node.is_blocked;
@@ -317,15 +351,19 @@ fn new_button(
     mut q_blockers: Query<(&mut Blockers, Entity), With<BaseNode>>,
     currencies: Res<Currency>,
 ) {
+    if events.is_empty() {
+        return;
+    }
+    let positions: Vec<_> = q_nodes
+        .iter()
+        .map(|(t, e)| {
+            let pos = t.translation.truncate();
+            ((pos.x, pos.y), e)
+        })
+        .collect();
+    let mut existing_points: Vec<_> = positions.into_iter().map(|(p, _)| p).collect();
+
     for event in events.iter() {
-        let positions: Vec<_> = q_nodes
-            .iter()
-            .map(|(t, e)| {
-                let pos = t.translation.truncate();
-                ((pos.x, pos.y), e)
-            })
-            .collect();
-        let existing_points: Vec<_> = positions.into_iter().map(|(p, _)| p).collect();
         let poisson = Poisson::new();
         let entity_from = event.0 .0;
         let pos = q_nodes
@@ -348,23 +386,44 @@ fn new_button(
                     continue;
                 }
                 random_number -= 25;
-
+                existing_points.push(pos);
                 // 75 weight left
 
-                let node = create_node(
-                    &mut commands,
-                    &map_assets,
-                    Vec2::new(pos.0, pos.1),
-                    event.0 .1 * 2f32,
-                );
-                if random_number < 40 {
+                let node = if random_number < 40 {
+                    let node = create_node(
+                        &mut commands,
+                        map_assets.mesh_blocker.clone(),
+                        &map_assets,
+                        Vec2::new(pos.0, pos.1),
+                        event.0 .1 / 2f32,
+                    );
                     commands
                         .entity(node)
                         .insert(NodeManualBlockToggle { is_blocked: false })
                         .insert(SelfBlockStatus { is_blocked: false });
+                    if let Ok(mut blockers) = q_blockers.get_mut(entity_from) {
+                        blockers.0.entities.push(node);
+                    } else {
+                        commands.entity(entity_from).insert(Blockers {
+                            entities: vec![node],
+                        });
+                    }
+
+                    commands.entity(node).insert(ToBlock {
+                        entities: vec![entity_from],
+                    });
+                    node
                 } else {
+                    let node = create_node(
+                        &mut commands,
+                        map_assets.mesh_gain.clone(),
+                        &map_assets,
+                        Vec2::new(pos.0, pos.1),
+                        event.0 .1 * 2f32,
+                    );
                     commands.entity(node).insert(NodeCurrencyGain);
-                }
+                    node
+                };
 
                 commands.spawn((
                     Text2dBundle {
@@ -376,18 +435,6 @@ fn new_button(
                     },
                     ButtonRef(node),
                 ));
-
-                commands.entity(node).insert(ToBlock {
-                    entities: vec![entity_from],
-                });
-
-                if let Ok(mut blockers) = q_blockers.get_mut(entity_from) {
-                    blockers.0.entities.push(node);
-                } else {
-                    commands.entity(entity_from).insert(Blockers {
-                        entities: vec![node],
-                    });
-                }
             }
         }
     }
@@ -423,10 +470,10 @@ fn recurse_block(
         // a previous check has blocked all hierarchy.
         return;
     }
-    if is_blocked || self_status.is_blocked {
+    if is_blocked {
         inherited_status.is_blocked = true;
     }
-    let status = inherited_status.is_blocked;
+    let status = inherited_status.is_blocked || self_status.is_blocked;
     for to_block in to_blocks.entities.iter() {
         let blockers = q_blockers
             .get(*to_block)
@@ -441,7 +488,14 @@ fn reset_manual_button_timers(
     currencies: Res<Currency>,
     mut events: EventReader<PropagateResetManualButtons>,
     mut q_blockers: Query<(&Blockers, Entity), With<BaseNode>>,
-    mut q_manual_node: Query<(&mut NodeManualBlockToggle, &mut Progress), With<BaseNode>>,
+    mut q_manual_node: Query<
+        (
+            &mut NodeManualBlockToggle,
+            &mut SelfBlockStatus,
+            &mut Progress,
+        ),
+        With<BaseNode>,
+    >,
 ) {
     for e in events.iter() {
         recurse_reset_manual(&e.0, &currencies, &mut q_manual_node, &q_blockers);
@@ -451,14 +505,22 @@ fn reset_manual_button_timers(
 fn recurse_reset_manual(
     e: &Entity,
     currencies: &Res<Currency>,
-    q_manual_node: &mut Query<(&mut NodeManualBlockToggle, &mut Progress), With<BaseNode>>,
+    q_manual_node: &mut Query<
+        (
+            &mut NodeManualBlockToggle,
+            &mut SelfBlockStatus,
+            &mut Progress,
+        ),
+        With<BaseNode>,
+    >,
     q_blockers: &Query<(&Blockers, Entity), With<BaseNode>>,
 ) {
-    if let Ok((mut manual, mut progress)) = q_manual_node.get_mut(*e) {
+    if let Ok((mut manual, mut self_status, mut progress)) = q_manual_node.get_mut(*e) {
         manual.is_blocked = true;
+        self_status.is_blocked = true;
         progress
             .timer
-            .set_duration(Duration::from_secs_f32(currencies.value));
+            .set_duration(Duration::from_secs_f32(currencies.value / 2f32));
         progress.timer.reset();
     }
     let Ok(blockers) = q_blockers.get(*e) else {
@@ -497,9 +559,6 @@ fn recurse_draw_relations(
     let status = inherited_status.is_blocked;
     if let Ok(blockers) = q_blockers.get(e) {
         for new_blocker in blockers.1.entities.iter() {
-            dbg!("line");
-            dbg!(t.translation);
-            dbg!(blockers.0.translation);
             lines.line_colored(
                 t.translation,
                 q_blockers
