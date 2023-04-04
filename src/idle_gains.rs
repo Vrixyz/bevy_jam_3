@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-#[derive(Debug)]
+#[derive(Debug, Resource, Default)]
 pub struct Currency {
     pub amount: i32,
 }

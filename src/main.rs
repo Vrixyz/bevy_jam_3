@@ -10,6 +10,7 @@ use bevy::{
     ecs::system::EntityCommands,
     prelude::*,
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
+    window::WindowResolution,
 };
 use bevy_mod_picking::{
     DebugEventsPickingPlugin, DefaultPickingPlugins, Highlighting, PickableBundle,
@@ -17,18 +18,29 @@ use bevy_mod_picking::{
 };
 use bevy_pancam::{PanCam, PanCamPlugin};
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
+use idle_gains::Currency;
+use new_node::*;
 use poisson::Poisson;
 use progress::Progress;
 use rand::{thread_rng, Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
+use status_visual::update_status_visual;
 
 mod idle_gains;
+mod new_node;
 mod poisson;
 mod progress;
+mod status_visual;
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                resolution: WindowResolution::new(640., 640.).with_scale_factor_override(1.0),
+                ..default()
+            }),
+            ..default()
+        }))
         .add_plugins(DefaultPickingPlugins) // <- Adds picking, interaction, and highlighting
         //.add_plugin(DebugEventsPickingPlugin) // <- Adds debug event logging.
         .add_plugin(PanCamPlugin::default())
@@ -47,6 +59,7 @@ fn main() {
         .add_system(update_inherited_block_status.after(check_self_block))
         .add_system(update_progress_text.after(update_inherited_block_status))
         .add_system(draw_relations.before(new_button))
+        .add_system(update_status_visual.after(update_inherited_block_status))
         .run();
 }
 
@@ -73,9 +86,6 @@ pub struct Blockers {
 pub struct ToBlock {
     pub entities: Vec<Entity>,
 }
-
-#[derive(Component)]
-pub struct BaseNode;
 
 #[derive(Component)]
 pub struct InheritedBlockStatus {
@@ -142,7 +152,7 @@ fn setup(
         map_assets.mesh_gain.clone(),
         &map_assets,
         Vec2::ZERO,
-        currencies.value,
+        currencies.amount as f32,
     );
     commands.entity(button_entity).insert(NodeCurrencyGain);
     commands.spawn((
@@ -156,36 +166,6 @@ fn setup(
     ));
 
     commands.insert_resource(map_assets);
-}
-
-fn create_node(
-    commands: &mut Commands,
-    mesh: Mesh2dHandle,
-    map_assets: &MapAssets,
-    pos: Vec2,
-    duration: f32,
-) -> Entity {
-    let ent = commands.spawn((
-        MaterialMesh2dBundle {
-            mesh: mesh.clone(),
-            transform: Transform::default()
-                .with_translation(pos.extend(0f32))
-                .with_scale(Vec3::splat(128.)),
-            material: map_assets.node_materials_normal.initial.clone(),
-            ..default()
-        },
-        PickableBundle::default(),
-        Progress {
-            timer: Timer::from_seconds(duration, TimerMode::Once),
-        },
-        BaseNode,
-        InheritedBlockStatus { is_blocked: false },
-        SelfBlockStatus { is_blocked: false },
-        Blockers { entities: vec![] },
-        ToBlock { entities: vec![] },
-        map_assets.node_materials_normal.clone(),
-    ));
-    ent.id()
 }
 
 fn update_progress_timer(
@@ -215,7 +195,7 @@ fn update_progress_manual_auto_block(
     for (e, t, mut status) in q_timer.iter_mut() {
         if t.timer.just_finished() {
             status.is_blocked = true;
-            events_writer.send(NewNodeEvent((e, currencies.value)));
+            events_writer.send(NewNodeEvent((e, currencies.amount)));
         }
     }
 }
@@ -258,10 +238,6 @@ fn update_progress_text(
     }
 }
 
-#[derive(Resource, Default)]
-struct Currency {
-    value: f32,
-}
 fn button_react(
     mut events: EventReader<PickingEvent>,
     mut events_writer: EventWriter<NewNodeEvent>,
@@ -276,13 +252,13 @@ fn button_react(
             };
             if !status.is_blocked && p.timer.finished() {
                 dbg!("GAIN!");
-                currencies.value += 1f32;
-                let new_time_duration = p.timer.duration().as_secs_f32() + currencies.value;
-                let new_time_duration = currencies.value * 2f32;
+                currencies.amount += 1;
+                let new_time_duration = p.timer.duration().as_secs_f32() + currencies.amount as f32;
+                let new_time_duration = currencies.amount as f32 * 1.5f32;
                 p.timer
                     .set_duration(Duration::from_secs_f32(new_time_duration));
                 p.timer.reset();
-                events_writer.send(NewNodeEvent((*e, currencies.value)));
+                events_writer.send(NewNodeEvent((*e, currencies.amount)));
                 events_reset_writer.send(PropagateResetManualButtons(*e));
             } else {
                 dbg!("NOT READY");
@@ -313,6 +289,7 @@ fn button_manual_toggle_block_react(
         }
     }
 }
+
 fn check_self_block(
     mut q_nodes: Query<
         (&Progress, &mut NodeManualBlockToggle, &mut SelfBlockStatus),
@@ -321,122 +298,6 @@ fn check_self_block(
 ) {
     for (p, manual, mut status) in q_nodes.iter_mut() {
         status.is_blocked = !p.timer.finished() || manual.is_blocked;
-    }
-}
-
-struct NewNodeEvent(pub (Entity, f32));
-
-#[derive(Resource)]
-pub struct RandomForMap {
-    pub(crate) random: ChaCha20Rng,
-    pub(crate) seed: u64,
-}
-
-impl Default for RandomForMap {
-    fn default() -> Self {
-        let seed = thread_rng().gen::<u64>();
-        Self {
-            random: ChaCha20Rng::seed_from_u64(seed),
-            seed,
-        }
-    }
-}
-
-fn new_button(
-    mut commands: Commands,
-    map_assets: Res<MapAssets>,
-    mut random_map: ResMut<RandomForMap>,
-    mut events: EventReader<NewNodeEvent>,
-    q_nodes: Query<(&Transform, Entity), With<BaseNode>>,
-    mut q_blockers: Query<(&mut Blockers, Entity), With<BaseNode>>,
-    currencies: Res<Currency>,
-) {
-    if events.is_empty() {
-        return;
-    }
-    let positions: Vec<_> = q_nodes
-        .iter()
-        .map(|(t, e)| {
-            let pos = t.translation.truncate();
-            ((pos.x, pos.y), e)
-        })
-        .collect();
-    let mut existing_points: Vec<_> = positions.into_iter().map(|(p, _)| p).collect();
-
-    for event in events.iter() {
-        let poisson = Poisson::new();
-        let entity_from = event.0 .0;
-        let pos = q_nodes
-            .get(entity_from)
-            .expect("entity in event gain currency should be valid")
-            .0
-            .translation
-            .truncate();
-        match poisson.compute_new_position(
-            &existing_points,
-            &(pos.x, pos.y),
-            200f32,
-            10,
-            &mut random_map.random,
-        ) {
-            None => {}
-            Some(pos) => {
-                let mut random_number = random_map.random.gen::<u32>() % 100;
-                if random_number < 25 {
-                    continue;
-                }
-                random_number -= 25;
-                existing_points.push(pos);
-                // 75 weight left
-
-                let node = if random_number < 40 {
-                    let node = create_node(
-                        &mut commands,
-                        map_assets.mesh_blocker.clone(),
-                        &map_assets,
-                        Vec2::new(pos.0, pos.1),
-                        event.0 .1 / 2f32,
-                    );
-                    commands
-                        .entity(node)
-                        .insert(NodeManualBlockToggle { is_blocked: false })
-                        .insert(SelfBlockStatus { is_blocked: false });
-                    if let Ok(mut blockers) = q_blockers.get_mut(entity_from) {
-                        blockers.0.entities.push(node);
-                    } else {
-                        commands.entity(entity_from).insert(Blockers {
-                            entities: vec![node],
-                        });
-                    }
-
-                    commands.entity(node).insert(ToBlock {
-                        entities: vec![entity_from],
-                    });
-                    node
-                } else {
-                    let node = create_node(
-                        &mut commands,
-                        map_assets.mesh_gain.clone(),
-                        &map_assets,
-                        Vec2::new(pos.0, pos.1),
-                        event.0 .1 * 2f32,
-                    );
-                    commands.entity(node).insert(NodeCurrencyGain);
-                    node
-                };
-
-                commands.spawn((
-                    Text2dBundle {
-                        text: Text::from_section("", map_assets.text_style.clone())
-                            .with_alignment(TextAlignment::Center),
-                        transform: Transform::default()
-                            .with_translation(Vec2::new(pos.0, pos.1).extend(1f32)),
-                        ..default()
-                    },
-                    ButtonRef(node),
-                ));
-            }
-        }
     }
 }
 
@@ -520,7 +381,7 @@ fn recurse_reset_manual(
         self_status.is_blocked = true;
         progress
             .timer
-            .set_duration(Duration::from_secs_f32(currencies.value / 2f32));
+            .set_duration(Duration::from_secs_f32(currencies.amount as f32 * 0.4f32));
         progress.timer.reset();
     }
     let Ok(blockers) = q_blockers.get(*e) else {
