@@ -57,7 +57,11 @@ fn main() {
         .add_system(reset_manual_button_timers.after(button_react))
         .add_system(button_manual_toggle_block_react)
         .add_system(new_button)
-        .add_system(check_self_block.after(new_button))
+        .add_system(
+            check_self_block
+                .after(new_button)
+                .after(reset_manual_button_timers),
+        )
         .add_system(update_inherited_block_status.after(check_self_block))
         .add_system(update_progress_text.after(update_inherited_block_status))
         .add_system(draw_relations.before(new_button))
@@ -402,48 +406,58 @@ fn recurse_reset_manual(
 }
 
 fn draw_relations(
-    mut commands: Commands,
     mut lines: ResMut<DebugLines>,
-    map_assets: Res<MapAssets>,
-    mut q_to_block: Query<(&ToBlock, Entity), With<BaseNode>>,
-    mut q_blockers: Query<(&Transform, &Blockers, Entity), With<BaseNode>>,
-    mut q_blockStatus: Query<(&Transform, &InheritedBlockStatus, &SelfBlockStatus), With<BaseNode>>,
+    q_to_block: Query<(&ToBlock, Entity), With<BaseNode>>,
+    q_blockers: Query<
+        (
+            &Transform,
+            &Blockers,
+            Entity,
+            &InheritedBlockStatus,
+            &SelfBlockStatus,
+        ),
+        With<BaseNode>,
+    >,
 ) {
     for (to_blocks, e) in q_to_block.iter() {
         if to_blocks.entities.is_empty() {
-            recurse_draw_relations(&mut lines, &q_blockers, &q_blockStatus, e);
+            recurse_draw_relations(&mut lines, &q_blockers, e);
         }
     }
 }
 
 fn recurse_draw_relations(
-    mut lines: &mut ResMut<DebugLines>,
-    q_blockers: &Query<(&Transform, &Blockers, Entity), With<BaseNode>>,
-    q_block_status: &Query<(&Transform, &InheritedBlockStatus, &SelfBlockStatus), With<BaseNode>>,
+    lines: &mut ResMut<DebugLines>,
+    q_blockers: &Query<
+        (
+            &Transform,
+            &Blockers,
+            Entity,
+            &InheritedBlockStatus,
+            &SelfBlockStatus,
+        ),
+        With<BaseNode>,
+    >,
     e: Entity,
 ) {
-    let (t, mut inherited_status, self_status) = q_block_status
-        .get(e)
-        .expect("all nodes should have a status");
-
-    let status = inherited_status.is_blocked;
-    if let Ok(blockers) = q_blockers.get(e) {
-        for new_blocker in blockers.1.entities.iter() {
+    if let Ok(blocked) = q_blockers.get(e) {
+        for new_blocker in blocked.1.entities.iter() {
+            let blocker_data = q_blockers.get(*new_blocker).unwrap();
             lines.line_colored(
-                t.translation,
+                blocked.0.translation,
                 q_blockers
                     .get(*new_blocker)
                     .expect("all nodes have a transform")
                     .0
                     .translation,
                 0f32,
-                if inherited_status.is_blocked {
+                if blocker_data.3.is_blocked || blocker_data.4.is_blocked {
                     Color::RED
                 } else {
                     Color::GREEN
                 },
             );
-            recurse_draw_relations(lines, q_blockers, q_block_status, *new_blocker);
+            recurse_draw_relations(lines, q_blockers, *new_blocker);
         }
     }
 }
