@@ -57,7 +57,7 @@ fn main() {
         .add_system(reset_manual_button_timers.after(button_react))
         .add_system(button_manual_toggle_block_react)
         .add_system(new_button)
-        .add_system(check_self_block)
+        .add_system(check_self_block.after(new_button))
         .add_system(update_inherited_block_status.after(check_self_block))
         .add_system(update_progress_text.after(update_inherited_block_status))
         .add_system(draw_relations.before(new_button))
