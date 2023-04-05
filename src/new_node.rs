@@ -9,7 +9,7 @@ use rand_chacha::ChaCha20Rng;
 
 use crate::*;
 
-pub const TIMER_BLOCKER_MULT: f32 = 0.45f32;
+pub const TIMER_BLOCKER_MULT: f32 = 0.35f32;
 pub const TIMER_RESET_BLOCKER_FIXED: f32 = 0.5f32;
 pub const TIMER_GAIN_MULT: f32 = 2.5f32;
 
@@ -136,15 +136,15 @@ pub fn new_button(
             None => {}
             Some(pos) => {
                 let mut random_number = random_map.random.gen::<u32>() % 100;
-                let chance_to_no_room = 30;
+                let chance_to_no_room = 20;
                 if random_number < chance_to_no_room {
                     continue;
                 }
                 random_number -= chance_to_no_room;
                 existing_points.push(pos);
-                // 70 weight left
+                // 80 weight left
 
-                let node = if random_number < 45 {
+                let node = if random_number < 55 {
                     let node = create_node(
                         &mut commands,
                         map_assets.mesh_blocker.clone(),

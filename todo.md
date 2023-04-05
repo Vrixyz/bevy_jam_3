@@ -1,3 +1,4 @@
-- background (diamond?) for inherited state
-  - red when inherited is blocked
-  - green when inherited is not blocked
+- shader to show the progress of the timer
+- a good visual for seeing blockers status
+- fx when clicking Gain :)
+- fix wasm not being centered

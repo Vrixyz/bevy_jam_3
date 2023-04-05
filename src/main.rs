@@ -195,6 +195,7 @@ fn update_progress_timer(
                 continue;
             }
         } else if status.is_blocked {
+            t.timer.tick(time.delta().div_f32(3f32));
             continue;
         }
         t.timer.tick(time.delta());
