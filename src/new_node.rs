@@ -2,6 +2,7 @@ use bevy::{
     prelude::*,
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
 };
+use bevy_easings::{Ease, EaseFunction, EaseMethod, EasingType};
 use bevy_mod_picking::PickableBundle;
 use rand::thread_rng;
 use rand_chacha::ChaCha20Rng;
@@ -16,6 +17,8 @@ pub struct NewNodeEvent(pub (Entity, i32));
 
 #[derive(Component)]
 pub struct BaseNode;
+#[derive(Component)]
+pub struct EyeCatcher(pub Entity);
 
 #[derive(Resource)]
 pub struct RandomForMap {
@@ -40,14 +43,35 @@ pub(super) fn create_node(
     pos: Vec2,
     duration: f32,
 ) -> Entity {
-    let eye_catcher = commands.spawn((MaterialMesh2dBundle {
-        mesh: map_assets.eye_catcher_mesh.clone(),
-        transform: Transform::default()
-            .with_translation(pos.extend(0f32))
-            .with_scale(Vec3::splat(160.)),
-        material: map_assets.eye_catcher_material.clone(),
-        ..default()
-    },));
+    let eye_catcher = commands
+        .spawn((
+            MaterialMesh2dBundle {
+                mesh: map_assets.eye_catcher_mesh.clone(),
+                material: map_assets.eye_catcher_material.clone(),
+                visibility: Visibility::Hidden,
+                ..default()
+            },
+            Transform {
+                translation: pos.extend(0f32),
+                scale: Vec3::splat(160.),
+                rotation: Quat::from_axis_angle(Vec3::Z, 0f32),
+                ..default()
+            }
+            .ease_to(
+                Transform {
+                    translation: pos.extend(0f32),
+                    scale: Vec3::splat(160.),
+                    rotation: Quat::from_axis_angle(Vec3::Z, 6f32 / 12f32 * std::f32::consts::TAU),
+                    ..default()
+                },
+                EaseMethod::Linear,
+                EasingType::Loop {
+                    duration: std::time::Duration::from_millis(1000),
+                    pause: Some(std::time::Duration::from_millis(0)),
+                },
+            ),
+        ))
+        .id();
     let ent = commands.spawn((
         MaterialMesh2dBundle {
             mesh: mesh.clone(),
@@ -57,6 +81,7 @@ pub(super) fn create_node(
             material: map_assets.node_materials_normal.initial.clone(),
             ..default()
         },
+        EyeCatcher(eye_catcher),
         PickableBundle::default(),
         Progress {
             timer: Timer::from_seconds(duration, TimerMode::Once),

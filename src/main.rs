@@ -12,6 +12,7 @@ use bevy::{
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
     window::WindowResolution,
 };
+use bevy_easings::EasingsPlugin;
 use bevy_mod_picking::{
     DebugEventsPickingPlugin, DefaultPickingPlugins, Highlighting, PickableBundle,
     PickingCameraBundle, PickingEvent,
@@ -45,6 +46,7 @@ fn main() {
         //.add_plugin(DebugEventsPickingPlugin) // <- Adds debug event logging.
         .add_plugin(PanCamPlugin::default())
         .add_plugin(DebugLinesPlugin::default())
+        .add_plugin(EasingsPlugin)
         .add_event::<NewNodeEvent>()
         .add_event::<PropagateResetManualButtons>()
         .init_resource::<Currency>()
