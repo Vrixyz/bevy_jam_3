@@ -136,13 +136,13 @@ pub fn new_button(
             None => {}
             Some(pos) => {
                 let mut random_number = random_map.random.gen::<u32>() % 100;
-                let chance_to_no_room = 20;
+                let chance_to_no_room = if currencies.amount <= 1 { 0 } else { 20 };
                 if random_number < chance_to_no_room {
                     continue;
                 }
                 random_number -= chance_to_no_room;
                 existing_points.push(pos);
-                // 80 weight left
+                // 80 weight left?
 
                 let node = if random_number < 55 {
                     let node = create_node(
