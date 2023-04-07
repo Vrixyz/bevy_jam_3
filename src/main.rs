@@ -6,6 +6,7 @@
 
 use std::{ops::ControlFlow, time::Duration};
 
+use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 use bevy::{
     ecs::system::EntityCommands,
     input::common_conditions::input_toggle_active,
@@ -30,6 +31,7 @@ use status_visual::{auto_click, update_status_visual};
 
 mod idle_gains;
 mod new_node;
+//pub mod persisted_game;
 mod poisson;
 mod progress;
 mod status_visual;
@@ -45,8 +47,10 @@ fn main() {
             }),
             ..default()
         }))
-        .add_plugins(DefaultPickingPlugins) // <- Adds picking, interaction, and highlighting
-        //.add_plugin(DebugEventsPickingPlugin) // <- Adds debug event logging.
+        .add_plugin(FrameTimeDiagnosticsPlugin::default())
+        // Adds a system that prints diagnostics to the console
+        .add_plugin(LogDiagnosticsPlugin::default())
+        .add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_plugin(PanCamPlugin::default())
         .add_plugin(DebugLinesPlugin::default())
         .add_plugin(EasingsPlugin)
