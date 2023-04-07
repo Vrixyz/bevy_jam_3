@@ -2,3 +2,4 @@
 - a good visual for seeing blockers status
 - fx when clicking Gain :)
 - fix wasm not being centered
+- perf optimisations
