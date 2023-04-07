@@ -50,7 +50,6 @@ fn main() {
         .add_plugin(FrameTimeDiagnosticsPlugin::default())
         // Adds a system that prints diagnostics to the console
         .add_plugin(LogDiagnosticsPlugin::default())
-        .add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_plugin(PanCamPlugin::default())
         .add_plugin(DebugLinesPlugin::default())
         .add_plugin(EasingsPlugin)
