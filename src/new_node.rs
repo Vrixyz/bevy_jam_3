@@ -9,9 +9,9 @@ use rand_chacha::ChaCha20Rng;
 
 use crate::{status_visual::AutoClick, *};
 
-pub const TIMER_BLOCKER_MULT: f32 = 0.035f32;
+pub const TIMER_BLOCKER_MULT: f32 = 0.035f32 / 1000f32;
 pub const TIMER_RESET_BLOCKER_FIXED: f32 = 0.05f32;
-pub const TIMER_GAIN_MULT: f32 = 2.5f32 / 1000f32;
+pub const TIMER_GAIN_MULT: f32 = 2.5f32 / 100000f32;
 
 pub struct NewNodeEvent(pub (Entity, i32));
 
