@@ -76,7 +76,7 @@ fn main() {
         .add_system(
             auto_click
                 .after(update_status_visual)
-                .run_if(input_toggle_active(true, KeyCode::C)),
+                .run_if(input_toggle_active(false, KeyCode::C)),
         )
         .run();
 }
