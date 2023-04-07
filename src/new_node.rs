@@ -7,11 +7,11 @@ use bevy_mod_picking::PickableBundle;
 use rand::thread_rng;
 use rand_chacha::ChaCha20Rng;
 
-use crate::*;
+use crate::{status_visual::AutoClick, *};
 
-pub const TIMER_BLOCKER_MULT: f32 = 0.35f32;
-pub const TIMER_RESET_BLOCKER_FIXED: f32 = 0.5f32;
-pub const TIMER_GAIN_MULT: f32 = 2.5f32;
+pub const TIMER_BLOCKER_MULT: f32 = 0.035f32;
+pub const TIMER_RESET_BLOCKER_FIXED: f32 = 0.05f32;
+pub const TIMER_GAIN_MULT: f32 = 2.5f32 / 1000f32;
 
 pub struct NewNodeEvent(pub (Entity, i32));
 
@@ -72,28 +72,31 @@ pub(super) fn create_node(
             ),
         ))
         .id();
-    let ent = commands.spawn((
-        MaterialMesh2dBundle {
-            mesh: mesh.clone(),
-            transform: Transform::default()
-                .with_translation(pos.extend(1f32))
-                .with_scale(Vec3::splat(128.)),
-            material: map_assets.node_materials_normal.initial.clone(),
-            ..default()
-        },
-        EyeCatcher(eye_catcher),
-        PickableBundle::default(),
-        Progress {
-            timer: Timer::from_seconds(duration, TimerMode::Once),
-        },
-        BaseNode,
-        InheritedBlockStatus { is_blocked: false },
-        SelfBlockStatus { is_blocked: false },
-        Blockers { entities: vec![] },
-        ToBlock { entities: vec![] },
-        map_assets.node_materials_normal.clone(),
-    ));
-    ent.id()
+    let ent = commands
+        .spawn((
+            MaterialMesh2dBundle {
+                mesh: mesh.clone(),
+                transform: Transform::default()
+                    .with_translation(pos.extend(1f32))
+                    .with_scale(Vec3::splat(128.)),
+                material: map_assets.node_materials_normal.initial.clone(),
+                ..default()
+            },
+            EyeCatcher(eye_catcher),
+            PickableBundle::default(),
+            Progress {
+                timer: Timer::from_seconds(duration, TimerMode::Once),
+            },
+            BaseNode,
+            InheritedBlockStatus { is_blocked: false },
+            SelfBlockStatus { is_blocked: false },
+            Blockers { entities: vec![] },
+            ToBlock { entities: vec![] },
+            map_assets.node_materials_normal.clone(),
+        ))
+        .id();
+    commands.entity(eye_catcher).insert(AutoClick(ent));
+    ent
 }
 
 pub fn new_button(

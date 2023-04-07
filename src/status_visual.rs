@@ -1,5 +1,5 @@
 use bevy::{prelude::*, sprite::Mesh2dHandle};
-use bevy_mod_picking::{Highlighting, Selection};
+use bevy_mod_picking::{Highlighting, PickingEvent, Selection};
 
 use crate::{
     new_node::EyeCatcher,
@@ -53,6 +53,21 @@ pub fn update_status_visual(
             else {
                 *q_visibility.get_mut(eye_catcher.0).unwrap() = Visibility::Visible;
             }
+        }
+    }
+}
+
+#[derive(Component)]
+pub struct AutoClick(pub Entity);
+
+pub fn auto_click(
+    mut events: EventWriter<PickingEvent>,
+    q_autoclick: Query<(&Visibility, &AutoClick)>,
+    mut q_interact: Query<&mut Interaction>,
+) {
+    for (v, auto_click) in q_autoclick.iter() {
+        if v == Visibility::Visible {
+            events.send(PickingEvent::Clicked(auto_click.0))
         }
     }
 }

@@ -8,6 +8,7 @@ use std::{ops::ControlFlow, time::Duration};
 
 use bevy::{
     ecs::system::EntityCommands,
+    input::common_conditions::input_toggle_active,
     prelude::*,
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
     window::WindowResolution,
@@ -15,7 +16,7 @@ use bevy::{
 use bevy_easings::EasingsPlugin;
 use bevy_mod_picking::{
     DebugEventsPickingPlugin, DefaultPickingPlugins, Highlighting, PickableBundle,
-    PickingCameraBundle, PickingEvent,
+    PickingCameraBundle, PickingEvent, RaycastSource, UpdatePicks,
 };
 use bevy_pancam::{PanCam, PanCamPlugin};
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
@@ -25,7 +26,7 @@ use poisson::Poisson;
 use progress::Progress;
 use rand::{thread_rng, Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
-use status_visual::update_status_visual;
+use status_visual::{auto_click, update_status_visual};
 
 mod idle_gains;
 mod new_node;
@@ -34,6 +35,8 @@ mod progress;
 mod status_visual;
 
 fn main() {
+    //persisted_game::save();
+    //return;
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
@@ -66,6 +69,11 @@ fn main() {
         .add_system(update_progress_text.after(update_inherited_block_status))
         .add_system(draw_relations.before(new_button))
         .add_system(update_status_visual.after(update_inherited_block_status))
+        .add_system(
+            auto_click
+                .after(update_status_visual)
+                .run_if(input_toggle_active(true, KeyCode::C)),
+        )
         .run();
 }
 
@@ -126,7 +134,10 @@ fn setup(
     // 2d camera
     commands.spawn((
         Camera2dBundle::default(),
-        PickingCameraBundle::default(),
+        PickingCameraBundle {
+            source: RaycastSource::default(),
+            update: UpdatePicks::OnMouseEvent,
+        },
         PanCam::default(),
     ));
 
@@ -265,7 +276,7 @@ fn button_react(
                 continue;
             };
             if !status.is_blocked && p.timer.finished() {
-                dbg!("GAIN!");
+                //dbg!("GAIN!");
                 currencies.amount += 1;
                 let new_time_duration = p.timer.duration().as_secs_f32() + currencies.amount as f32;
                 let new_time_duration = currencies.amount as f32 * TIMER_GAIN_MULT;
@@ -291,14 +302,14 @@ fn button_manual_toggle_block_react(
                 continue;
             };
             if status.is_blocked {
-                dbg!("node is blocked");
+                //dbg!("node is blocked");
                 continue;
             }
             if p.timer.finished() {
-                dbg!("toggle block!");
+                //dbg!("toggle block!");
                 node.is_blocked = !node.is_blocked;
             } else {
-                dbg!("NOT READY");
+                //dbg!("NOT READY");
             }
         }
     }
