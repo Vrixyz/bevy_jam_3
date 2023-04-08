@@ -7,6 +7,7 @@
 use std::{ops::ControlFlow, time::Duration};
 
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
+use bevy::input::common_conditions::input_pressed;
 use bevy::{
     ecs::system::EntityCommands,
     input::common_conditions::input_toggle_active,
@@ -24,7 +25,7 @@ use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 use idle_gains::Currency;
 use new_node::*;
 use poisson::Poisson;
-use progress::Progress;
+use progress::*;
 use rand::{thread_rng, Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use status_visual::{auto_click, update_status_visual};
@@ -35,6 +36,9 @@ mod new_node;
 mod poisson;
 mod progress;
 mod status_visual;
+pub mod timer_material;
+
+use timer_material::{TimerMaterial, TimerMaterialPlugin, TimerMaterials};
 
 fn main() {
     //persisted_game::save();
@@ -54,6 +58,7 @@ fn main() {
         .add_plugin(PanCamPlugin::default())
         .add_plugin(DebugLinesPlugin::default())
         .add_plugin(EasingsPlugin)
+        .add_plugin(TimerMaterialPlugin)
         .add_event::<NewNodeEvent>()
         .add_event::<PropagateResetManualButtons>()
         .init_resource::<Currency>()
@@ -71,6 +76,7 @@ fn main() {
         )
         .add_system(update_inherited_block_status.after(check_self_block))
         .add_system(update_progress_text.after(update_inherited_block_status))
+        .add_system(update_progress_material.after(update_inherited_block_status))
         .add_system(draw_relations.before(new_button))
         .add_system(update_status_visual.after(update_inherited_block_status))
         .add_system(
@@ -130,6 +136,7 @@ pub struct MapAssets {
 fn setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
+    mut assets_timer: ResMut<Assets<TimerMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     currencies: ResMut<Currency>,
@@ -144,7 +151,7 @@ fn setup(
         },
         PanCam::default(),
     ));
-
+    commands.spawn(TimerMaterials::new(&mut assets_timer, Color::GREEN, 100));
     let font = asset_server.load("fonts/FiraSans-Bold.ttf");
     let mat_initial = materials.add(ColorMaterial::from(Color::WHITE));
     let mat_initial_blocked = materials.add(ColorMaterial::from(Color::ANTIQUE_WHITE));
@@ -194,77 +201,6 @@ fn setup(
     ));
 
     commands.insert_resource(map_assets);
-}
-
-fn update_progress_timer(
-    time: Res<Time>,
-    mut q_timer: Query<(
-        &mut Progress,
-        &InheritedBlockStatus,
-        Option<&NodeManualBlockToggle>,
-    )>,
-) {
-    for (mut t, status, manual) in q_timer.iter_mut() {
-        if let Some(manual) = manual {
-            if manual.is_blocked && status.is_blocked {
-                continue;
-            }
-        } else if status.is_blocked {
-            t.timer.tick(time.delta().div_f32(3f32));
-            continue;
-        }
-        t.timer.tick(time.delta());
-    }
-}
-fn update_progress_manual_auto_block(
-    currencies: Res<Currency>,
-    mut events_writer: EventWriter<NewNodeEvent>,
-    mut q_timer: Query<(Entity, &Progress, &mut NodeManualBlockToggle)>,
-) {
-    for (e, t, mut status) in q_timer.iter_mut() {
-        if t.timer.just_finished() {
-            status.is_blocked = true;
-            events_writer.send(NewNodeEvent((e, currencies.amount)));
-        }
-    }
-}
-
-fn update_progress_text(
-    mut q_texts: Query<(&mut Text, &ButtonRef)>,
-    q_timer: Query<
-        (
-            &Progress,
-            &InheritedBlockStatus,
-            &SelfBlockStatus,
-            Option<&NodeManualBlockToggle>,
-        ),
-        Or<(Changed<Progress>, Changed<InheritedBlockStatus>)>,
-    >,
-) {
-    for (mut t, b) in q_texts.iter_mut() {
-        match q_timer.get(b.0) {
-            Err(_) => {}
-            Ok((p, status, self_status, manual_toggle)) => {
-                let block_status = if status.is_blocked { " (blocked)" } else { "" };
-                if p.timer.finished() {
-                    let text = if manual_toggle.is_some() {
-                        if self_status.is_blocked {
-                            "Unblock"
-                        } else {
-                            "Block"
-                        }
-                        .into()
-                    } else {
-                        format!("Gain!{}", block_status)
-                    };
-                    t.sections[0].value = text;
-                } else {
-                    t.sections[0].value =
-                        format!("{:.0}s{}", p.timer.remaining_secs().ceil(), block_status);
-                }
-            }
-        }
-    }
 }
 
 fn button_react(
