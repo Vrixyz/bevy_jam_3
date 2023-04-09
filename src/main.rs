@@ -97,7 +97,7 @@ pub struct NodeManualBlockToggle {
     pub is_blocked: bool,
 }
 #[derive(Component)]
-pub struct NodeCurrencyGain;
+pub struct NodeCurrencyGain(pub u32);
 //
 
 /// To know which nodes are blocking our behaviour.
@@ -151,7 +151,7 @@ fn setup(
         },
         PanCam::default(),
     ));
-    commands.spawn(TimerMaterials::new(&mut assets_timer, Color::GREEN, 100));
+    commands.spawn(TimerMaterials::new(&mut assets_timer, Color::GREEN, 180));
     let font = asset_server.load("fonts/FiraSans-Bold.ttf");
     let mat_initial = materials.add(ColorMaterial::from(Color::WHITE));
     let mat_initial_blocked = materials.add(ColorMaterial::from(Color::ANTIQUE_WHITE));
@@ -189,16 +189,7 @@ fn setup(
         Vec2::ZERO,
         currencies.amount as f32,
     );
-    commands.entity(button_entity).insert(NodeCurrencyGain);
-    commands.spawn((
-        Text2dBundle {
-            text: Text::from_section("translation", map_assets.text_style.clone())
-                .with_alignment(TextAlignment::Center),
-            transform: Transform::default().with_translation(Vec2::ZERO.extend(1f32)),
-            ..default()
-        },
-        ButtonRef(button_entity),
-    ));
+    commands.entity(button_entity).insert(NodeCurrencyGain(1));
 
     commands.insert_resource(map_assets);
 }
@@ -207,22 +198,23 @@ fn button_react(
     mut events: EventReader<PickingEvent>,
     mut events_writer: EventWriter<NewNodeEvent>,
     mut events_reset_writer: EventWriter<PropagateResetManualButtons>,
-    mut q_timer: Query<(&mut Progress, &InheritedBlockStatus), With<NodeCurrencyGain>>,
+    mut q_timer: Query<(&mut Progress, &InheritedBlockStatus, &mut NodeCurrencyGain)>,
     mut currencies: ResMut<Currency>,
 ) {
     for event in events.iter() {
         if let PickingEvent::Clicked(e) = event {
-            let Ok((mut p, status)) = q_timer.get_mut(*e) else {
+            let Ok((mut p, status, mut gain)) = q_timer.get_mut(*e) else {
                 continue;
             };
             if !status.is_blocked && p.timer.finished() {
                 //dbg!("GAIN!");
                 currencies.amount += 1;
-                let new_time_duration = p.timer.duration().as_secs_f32() + currencies.amount as f32;
-                let new_time_duration = currencies.amount as f32 * TIMER_GAIN_MULT;
+                let new_time_duration = currencies.amount as f32 * TIMER_GAIN_MULT
+                    + TIMER_GAIN_MULT_PER_LEVEL * gain.0 as f32;
                 p.timer
                     .set_duration(Duration::from_secs_f32(new_time_duration));
                 p.timer.reset();
+                gain.0 += 1;
                 events_writer.send(NewNodeEvent((*e, currencies.amount)));
                 events_reset_writer.send(PropagateResetManualButtons(*e));
             } else {

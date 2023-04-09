@@ -9,9 +9,10 @@ use rand_chacha::ChaCha20Rng;
 
 use crate::{status_visual::AutoClick, *};
 
-pub const TIMER_BLOCKER_MULT: f32 = 0.5f32; // / 10000f32;
-pub const TIMER_RESET_BLOCKER_FIXED: f32 = 0.5f32 / 1000f32;
-pub const TIMER_GAIN_MULT: f32 = 2.5f32; // / 100000f32;
+pub const TIMER_BLOCKER_MULT: f32 = 0.2f32; // / 10000f32;
+pub const TIMER_RESET_BLOCKER_FIXED: f32 = 0.5f32; // / 1000f32;
+pub const TIMER_GAIN_MULT: f32 = 0.3f32; // / 100000f32;
+pub const TIMER_GAIN_MULT_PER_LEVEL: f32 = 2f32; // / 10000f32;
 
 pub struct NewNodeEvent(pub (Entity, i32));
 
@@ -95,6 +96,16 @@ pub(super) fn create_node(
             map_assets.node_materials_normal.clone(),
         ))
         .id();
+
+    commands.spawn((
+        MaterialMesh2dBundle {
+            mesh: map_assets.mesh_gain.clone(),
+            material: Handle::<TimerMaterial>::default(),
+            transform: Transform::default().with_translation(pos.extend(11f32)),
+            ..default()
+        },
+        ButtonRef(ent),
+    ));
     commands.entity(eye_catcher).insert(AutoClick(ent));
     ent
 }
@@ -139,15 +150,15 @@ pub fn new_button(
             None => {}
             Some(pos) => {
                 let mut random_number = random_map.random.gen::<u32>() % 100;
-                let chance_to_no_room = if currencies.amount <= 1 { 0 } else { 20 };
+                let chance_to_no_room = if currencies.amount <= 1 { 0 } else { 30 };
                 if random_number < chance_to_no_room {
                     continue;
                 }
                 random_number -= chance_to_no_room;
                 existing_points.push(pos);
-                // 80 weight left?
+                // 70 weight left?
 
-                let node = if random_number < 55 {
+                let node = if random_number < 50 {
                     let node = create_node(
                         &mut commands,
                         map_assets.mesh_blocker.clone(),
@@ -177,32 +188,11 @@ pub fn new_button(
                         map_assets.mesh_gain.clone(),
                         &map_assets,
                         Vec2::new(pos.0, pos.1),
-                        event.0 .1 as f32 * TIMER_GAIN_MULT,
+                        event.0 .1 as f32 * TIMER_GAIN_MULT + TIMER_GAIN_MULT_PER_LEVEL,
                     );
-                    commands.entity(node).insert(NodeCurrencyGain);
+                    commands.entity(node).insert(NodeCurrencyGain(1));
                     node
                 };
-                commands.spawn((
-                    Text2dBundle {
-                        text: Text::from_section("", map_assets.text_style.clone())
-                            .with_alignment(TextAlignment::Center),
-                        transform: Transform::default()
-                            .with_translation(Vec2::new(pos.0, pos.1).extend(10f32)),
-                        ..default()
-                    },
-                    ButtonRef(node),
-                ));
-                commands.spawn((
-                    MaterialMesh2dBundle {
-                        mesh: map_assets.mesh_gain.clone(),
-                        material: Handle::<TimerMaterial>::default(),
-                        //                        visibility: Visibility::Hidden,
-                        transform: Transform::default()
-                            .with_translation(Vec2::new(pos.0, pos.1).extend(11f32)),
-                        ..default()
-                    },
-                    ButtonRef(node),
-                ));
                 /*
                 commands.spawn((
                     Text2dBundle {

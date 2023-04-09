@@ -33,13 +33,13 @@ impl TimerMaterials {
         for i in 0..=resolution {
             materials.push(assets.add(TimerMaterial {
                 color,
-                progress: dbg!(i as f32 / (resolution as f32)),
+                progress: i as f32 / (resolution as f32),
             }))
         }
         TimerMaterials { materials }
     }
     pub fn get_material(&self, progress: f32) -> Handle<TimerMaterial> {
-        self.materials[(progress * (self.materials.len() as f32)) as usize].clone()
+        self.materials[(progress * ((self.materials.len() - 1) as f32)) as usize].clone()
     }
     // TODO: release materials when done with it.
 }

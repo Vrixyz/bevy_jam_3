@@ -100,6 +100,11 @@ pub fn update_progress_material(
             Ok((p, status, self_status, manual_toggle)) => {
                 if p.timer.finished() {
                     // nope
+                    if p.timer.just_finished() {
+                        commands
+                            .entity(b.0)
+                            .insert(timer_materials.get_material(1f32));
+                    }
                 } else {
                     commands
                         .entity(b.0)
