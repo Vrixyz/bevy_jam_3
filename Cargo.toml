@@ -6,7 +6,11 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 bevy = "0.10"
-bevy_mod_picking = "*"
+bevy_mod_picking = { git = "https://github.com/aevyrie/bevy_mod_picking.git", branch = "beta" }
+bevy_picking_highlight = { git = "https://github.com/aevyrie/bevy_mod_picking.git", branch = "beta" }
+bevy_picking_input = { git = "https://github.com/aevyrie/bevy_mod_picking.git", branch = "beta" }
+bevy_picking_core = { git = "https://github.com/aevyrie/bevy_mod_picking.git", branch = "beta" }
+bevy_picking_sprite = { git = "https://github.com/aevyrie/bevy_mod_picking.git", branch = "beta" }
 rand = { version = "*", features = ["small_rng"] }
 rand_chacha = "*"
 bevy_pancam = "*"

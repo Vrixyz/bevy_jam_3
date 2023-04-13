@@ -16,10 +16,8 @@ use bevy::{
     window::WindowResolution,
 };
 use bevy_easings::EasingsPlugin;
-use bevy_mod_picking::{
-    DebugEventsPickingPlugin, DefaultPickingPlugins, Highlighting, PickableBundle,
-    PickingCameraBundle, PickingEvent, RaycastSource, UpdatePicks,
-};
+use bevy_mod_picking::events::PointerEvent;
+use bevy_mod_picking::prelude::*;
 use bevy_pancam::{PanCam, PanCamPlugin};
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 use idle_gains::Currency;
@@ -151,14 +149,7 @@ fn setup(
 ) {
     commands.insert_resource(RandomForMap::default());
     // 2d camera
-    commands.spawn((
-        Camera2dBundle::default(),
-        PickingCameraBundle {
-            source: RaycastSource::default(),
-            update: UpdatePicks::OnMouseEvent,
-        },
-        PanCam::default(),
-    ));
+    commands.spawn((Camera2dBundle::default(), PanCam::default()));
     dbg!("setup main");
     commands.spawn(TimerMaterials::new(&mut assets_timer, Color::GREEN, 180));
     let font = asset_server.load("fonts/FiraSans-Bold.ttf");
@@ -191,24 +182,23 @@ fn setup(
 }
 
 fn button_manual_toggle_block_react(
-    mut events: EventReader<PickingEvent>,
+    mut events: EventReader<PointerEvent<Down>>,
     mut q_nodes: Query<(&Progress, &mut NodeManualBlockToggle, &InheritedBlockStatus)>,
 ) {
     for event in events.iter() {
-        if let PickingEvent::Clicked(e) = event {
-            let Ok((p, mut node, status)) = q_nodes.get_mut(*e) else {
-                continue;
-            };
-            if status.is_blocked {
-                //dbg!("node is blocked");
-                continue;
-            }
-            if p.timer.finished() {
-                //dbg!("toggle block!");
-                node.is_blocked = !node.is_blocked;
-            } else {
-                //dbg!("NOT READY");
-            }
+        let e = event.target();
+        let Ok((p, mut node, status)) = q_nodes.get_mut(e) else {
+            continue;
+        };
+        if status.is_blocked {
+            //dbg!("node is blocked");
+            continue;
+        }
+        if p.timer.finished() {
+            //dbg!("toggle block!");
+            node.is_blocked = !node.is_blocked;
+        } else {
+            //dbg!("NOT READY");
         }
     }
 }

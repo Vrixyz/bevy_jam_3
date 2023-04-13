@@ -9,10 +9,10 @@ use rand_chacha::ChaCha20Rng;
 
 use crate::{picking::AutoClick, picking::HighlightingMaterials, *};
 
-pub const TIMER_BLOCKER_MULT: f32 = 0.2f32; // / 10000f32;
-pub const TIMER_RESET_BLOCKER_FIXED: f32 = 0.5f32; // / 1000f32;
-pub const TIMER_GAIN_MULT: f32 = 0.3f32; // / 100000f32;
-pub const TIMER_GAIN_MULT_PER_LEVEL: f32 = 2f32; // / 10000f32;
+pub const TIMER_BLOCKER_MULT: f32 = 0.2f32 / 10000f32;
+pub const TIMER_RESET_BLOCKER_FIXED: f32 = 0.5f32 / 1000f32;
+pub const TIMER_GAIN_MULT: f32 = 0.3f32 / 100000f32;
+pub const TIMER_GAIN_MULT_PER_LEVEL: f32 = 2f32 / 10000f32;
 
 pub struct NewNodeEvent(pub (Entity, i32));
 
@@ -81,7 +81,7 @@ pub(super) fn create_node(
                 transform: Transform::default()
                     .with_translation(pos.extend(1f32))
                     .with_scale(Vec3::splat(128.)),
-                material: highlights.node_materials_normal.initial.clone(),
+                material: highlights.mat_normal.clone(),
                 ..default()
             },
             EyeCatcher(eye_catcher),
