@@ -24,15 +24,18 @@ use bevy_pancam::{PanCam, PanCamPlugin};
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 use idle_gains::Currency;
 use new_node::*;
+use picking::auto_click;
+use picking::HighlightingMaterials;
 use poisson::Poisson;
 use progress::*;
 use rand::{thread_rng, Rng, SeedableRng};
 use rand_chacha::ChaCha20Rng;
-use status_visual::{auto_click, update_status_visual};
+use status_visual::update_status_visual;
 
 mod idle_gains;
 mod new_node;
 //pub mod persisted_game;
+pub mod picking;
 mod poisson;
 mod progress;
 mod status_visual;
@@ -62,13 +65,19 @@ fn main() {
         .add_event::<NewNodeEvent>()
         .add_event::<PropagateResetManualButtons>()
         .init_resource::<Currency>()
-        .add_startup_system(setup)
+        .add_startup_system(picking::setup)
+        .add_system(
+            setup
+                .in_schedule(CoreSchedule::Startup)
+                .in_base_set(StartupSet::PostStartup),
+        )
         .add_system(update_progress_timer)
         .add_system(update_progress_manual_auto_block)
-        .add_system(button_react)
-        .add_system(reset_manual_button_timers.after(button_react))
+        .add_system(picking::button_react)
+        .add_system(reset_manual_button_timers.after(picking::button_react))
         .add_system(button_manual_toggle_block_react)
         .add_system(new_button)
+        /* */
         .add_system(
             check_self_block
                 .after(new_button)
@@ -129,12 +138,11 @@ pub struct MapAssets {
     pub mesh_blocker: Mesh2dHandle,
     pub eye_catcher_mesh: Mesh2dHandle,
     pub eye_catcher_material: Handle<ColorMaterial>,
-    pub node_materials_normal: Highlighting<ColorMaterial>,
-    pub node_materials_blocked: Highlighting<ColorMaterial>,
 }
 
 fn setup(
     mut commands: Commands,
+    highlights: Res<HighlightingMaterials>,
     asset_server: Res<AssetServer>,
     mut assets_timer: ResMut<Assets<TimerMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -151,10 +159,9 @@ fn setup(
         },
         PanCam::default(),
     ));
+    dbg!("setup main");
     commands.spawn(TimerMaterials::new(&mut assets_timer, Color::GREEN, 180));
     let font = asset_server.load("fonts/FiraSans-Bold.ttf");
-    let mat_initial = materials.add(ColorMaterial::from(Color::WHITE));
-    let mat_initial_blocked = materials.add(ColorMaterial::from(Color::ANTIQUE_WHITE));
     let map_assets = MapAssets {
         font: font.clone(),
         text_style: TextStyle {
@@ -168,60 +175,19 @@ fn setup(
             .add(Mesh::from(shape::RegularPolygon::new(0.5f32, 6)))
             .into(),
         eye_catcher_material: materials.add(ColorMaterial::from(Color::YELLOW_GREEN)),
-        node_materials_normal: Highlighting {
-            initial: mat_initial.clone(),
-            hovered: Some(materials.add(ColorMaterial::from(Color::GRAY))),
-            pressed: Some(materials.add(ColorMaterial::from(Color::GREEN))),
-            selected: Some(mat_initial.clone()),
-        },
-        node_materials_blocked: Highlighting {
-            initial: mat_initial_blocked.clone(),
-            hovered: Some(materials.add(ColorMaterial::from(Color::DARK_GRAY))),
-            pressed: Some(materials.add(ColorMaterial::from(Color::DARK_GREEN))),
-            selected: Some(mat_initial_blocked.clone()),
-        },
     };
 
     let button_entity = create_node(
         &mut commands,
         map_assets.mesh_gain.clone(),
         &map_assets,
+        &highlights,
         Vec2::ZERO,
         currencies.amount as f32,
     );
     commands.entity(button_entity).insert(NodeCurrencyGain(1));
 
     commands.insert_resource(map_assets);
-}
-
-fn button_react(
-    mut events: EventReader<PickingEvent>,
-    mut events_writer: EventWriter<NewNodeEvent>,
-    mut events_reset_writer: EventWriter<PropagateResetManualButtons>,
-    mut q_timer: Query<(&mut Progress, &InheritedBlockStatus, &mut NodeCurrencyGain)>,
-    mut currencies: ResMut<Currency>,
-) {
-    for event in events.iter() {
-        if let PickingEvent::Clicked(e) = event {
-            let Ok((mut p, status, mut gain)) = q_timer.get_mut(*e) else {
-                continue;
-            };
-            if !status.is_blocked && p.timer.finished() {
-                //dbg!("GAIN!");
-                currencies.amount += 1;
-                let new_time_duration = currencies.amount as f32 * TIMER_GAIN_MULT
-                    + TIMER_GAIN_MULT_PER_LEVEL * gain.0 as f32;
-                p.timer
-                    .set_duration(Duration::from_secs_f32(new_time_duration));
-                p.timer.reset();
-                gain.0 += 1;
-                events_writer.send(NewNodeEvent((*e, currencies.amount)));
-                events_reset_writer.send(PropagateResetManualButtons(*e));
-            } else {
-                dbg!("NOT READY");
-            }
-        }
-    }
 }
 
 fn button_manual_toggle_block_react(

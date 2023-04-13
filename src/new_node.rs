@@ -7,7 +7,7 @@ use bevy_mod_picking::PickableBundle;
 use rand::thread_rng;
 use rand_chacha::ChaCha20Rng;
 
-use crate::{status_visual::AutoClick, *};
+use crate::{picking::AutoClick, picking::HighlightingMaterials, *};
 
 pub const TIMER_BLOCKER_MULT: f32 = 0.2f32; // / 10000f32;
 pub const TIMER_RESET_BLOCKER_FIXED: f32 = 0.5f32; // / 1000f32;
@@ -41,6 +41,7 @@ pub(super) fn create_node(
     commands: &mut Commands,
     mesh: Mesh2dHandle,
     map_assets: &MapAssets,
+    highlights: &HighlightingMaterials,
     pos: Vec2,
     duration: f32,
 ) -> Entity {
@@ -80,7 +81,7 @@ pub(super) fn create_node(
                 transform: Transform::default()
                     .with_translation(pos.extend(1f32))
                     .with_scale(Vec3::splat(128.)),
-                material: map_assets.node_materials_normal.initial.clone(),
+                material: highlights.node_materials_normal.initial.clone(),
                 ..default()
             },
             EyeCatcher(eye_catcher),
@@ -93,7 +94,7 @@ pub(super) fn create_node(
             SelfBlockStatus { is_blocked: false },
             Blockers { entities: vec![] },
             ToBlock { entities: vec![] },
-            map_assets.node_materials_normal.clone(),
+            highlights.node_materials_normal.clone(),
         ))
         .id();
 
@@ -113,6 +114,7 @@ pub(super) fn create_node(
 pub fn new_button(
     mut commands: Commands,
     map_assets: Res<MapAssets>,
+    highlights: Res<HighlightingMaterials>,
     mut random_map: ResMut<RandomForMap>,
     mut events: EventReader<NewNodeEvent>,
     q_nodes: Query<(&Transform, Entity), With<BaseNode>>,
@@ -163,6 +165,7 @@ pub fn new_button(
                         &mut commands,
                         map_assets.mesh_blocker.clone(),
                         &map_assets,
+                        &highlights,
                         Vec2::new(pos.0, pos.1),
                         event.0 .1 as f32 * TIMER_BLOCKER_MULT,
                     );
@@ -187,6 +190,7 @@ pub fn new_button(
                         &mut commands,
                         map_assets.mesh_gain.clone(),
                         &map_assets,
+                        &highlights,
                         Vec2::new(pos.0, pos.1),
                         event.0 .1 as f32 * TIMER_GAIN_MULT + TIMER_GAIN_MULT_PER_LEVEL,
                     );
