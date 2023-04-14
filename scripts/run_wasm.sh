@@ -3,4 +3,7 @@
 set -x
 set -eo pipefail
 
-static-web-server --port 8788 --root ./generated_wasm
+PORT=8791
+
+echo http://localhost:$PORT/index.html
+static-web-server --port $PORT --root ./generated_wasm

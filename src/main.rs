@@ -4,17 +4,11 @@
 // Feel free to delete this line.
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
-use std::{ops::ControlFlow, time::Duration};
+use std::time::Duration;
 
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
-use bevy::input::common_conditions::input_pressed;
-use bevy::{
-    ecs::system::EntityCommands,
-    input::common_conditions::input_toggle_active,
-    prelude::*,
-    sprite::{MaterialMesh2dBundle, Mesh2dHandle},
-    window::WindowResolution,
-};
+
+use bevy::{input::common_conditions::input_toggle_active, prelude::*, sprite::Mesh2dHandle};
 use bevy_easings::EasingsPlugin;
 use bevy_mod_picking::events::PointerEvent;
 use bevy_mod_picking::prelude::*;
@@ -26,8 +20,8 @@ use picking::auto_click;
 use picking::HighlightingMaterials;
 use poisson::Poisson;
 use progress::*;
-use rand::{thread_rng, Rng, SeedableRng};
-use rand_chacha::ChaCha20Rng;
+use rand::{Rng, SeedableRng};
+
 use status_visual::update_status_visual;
 
 mod idle_gains;
@@ -149,7 +143,11 @@ fn setup(
 ) {
     commands.insert_resource(RandomForMap::default());
     // 2d camera
-    commands.spawn((Camera2dBundle::default(), PanCam::default()));
+    commands.spawn((
+        Camera2dBundle::default(),
+        PanCam::default(),
+        PickRaycastCamera::default(),
+    ));
     dbg!("setup main");
     commands.spawn(TimerMaterials::new(&mut assets_timer, Color::GREEN, 180));
     let font = asset_server.load("fonts/FiraSans-Bold.ttf");

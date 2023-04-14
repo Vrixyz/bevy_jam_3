@@ -3,7 +3,7 @@ use bevy::{
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
 };
 use bevy_easings::{Ease, EaseFunction, EaseMethod, EasingType};
-use bevy_mod_picking::PickableBundle;
+use bevy_mod_picking::{events::EventListener, PickableBundle};
 use rand::thread_rng;
 use rand_chacha::ChaCha20Rng;
 
@@ -95,6 +95,7 @@ pub(super) fn create_node(
             Blockers { entities: vec![] },
             ToBlock { entities: vec![] },
             highlights.node_materials_normal.clone(),
+            PickRaycastTarget::default(), // <- Needed for the raycast backend.
         ))
         .id();
 
