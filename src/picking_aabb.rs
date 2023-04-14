@@ -56,7 +56,6 @@ pub fn aabb_picking(
     }) {
         let cursor_position = location.position;
         let mut blocked = false;
-        dbg!("cursor_position {}", cursor_position);
         let (camera_entity, camera, camera_transform) = cameras
             .iter()
             .find(|(_entity, camera, global_transform)| {
@@ -86,22 +85,14 @@ pub fn aabb_picking(
 
                 let half_extents = aabb.half_extents.truncate() / 2f32;
 
-                let target_size =
-                    if let Some(t) = location.target.get_render_target_info(&windows, &images) {
-                        t.physical_size.as_vec2() / t.scale_factor as f32
-                    } else {
-                        return None;
-                    };
                 let position = global_position.truncate() + aabb.center.truncate();
                 let center = aabb.center.truncate();
 
-                let min = position - half_extents + center; // + target_size / 2.0;
-                let max = position + half_extents + center; // + target_size / 2.0;
+                let min = position - half_extents + center;
+                let max = position + half_extents + center;
 
                 let contains_cursor = (min.x..max.x).contains(&cursor_position.x)
                     && (min.y..max.y).contains(&cursor_position.y);
-                dbg!("min {}, max: {}", min, max);
-                dbg!("position {}, contains: {}", position, contains_cursor);
 
                 blocked = contains_cursor && focus != Some(&FocusPolicy::Pass);
                 contains_cursor.then_some((
