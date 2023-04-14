@@ -18,6 +18,7 @@ use idle_gains::Currency;
 use new_node::*;
 use picking::auto_click;
 use picking::HighlightingMaterials;
+use picking_aabb::AabbBackend;
 use poisson::Poisson;
 use progress::*;
 use rand::{Rng, SeedableRng};
@@ -28,6 +29,7 @@ mod idle_gains;
 mod new_node;
 //pub mod persisted_game;
 pub mod picking;
+mod picking_aabb;
 mod poisson;
 mod progress;
 mod status_visual;
@@ -47,6 +49,7 @@ fn main() {
             ..default()
         }))
         .add_plugins(DefaultPickingPlugins) // <- Adds picking, interaction, and highlighting
+        .add_plugin(AabbBackend)
         //.add_plugin(DebugEventsPickingPlugin) // <- Adds debug event logging.
         .add_plugin(LogDiagnosticsPlugin::default())
         .add_plugin(FrameTimeDiagnosticsPlugin::default())

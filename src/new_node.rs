@@ -1,5 +1,7 @@
 use bevy::{
+    math::Vec3A,
     prelude::*,
+    render::primitives::Aabb,
     sprite::{MaterialMesh2dBundle, Mesh2dHandle},
 };
 use bevy_easings::{Ease, EaseFunction, EaseMethod, EasingType};
@@ -95,7 +97,10 @@ pub(super) fn create_node(
             Blockers { entities: vec![] },
             ToBlock { entities: vec![] },
             highlights.node_materials_normal.clone(),
-            PickRaycastTarget::default(), // <- Needed for the raycast backend.
+            Aabb {
+                half_extents: Vec3A::splat(128f32),
+                center: Vec3A::default(),
+            }, //PickRaycastTarget::default(), // <- Needed for the raycast backend.
         ))
         .id();
 
