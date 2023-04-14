@@ -32,9 +32,7 @@ impl Plugin for AabbBackend {
 pub fn aabb_picking(
     pointers: Query<(&PointerId, &PointerLocation)>,
     cameras: Query<(Entity, &Camera, &GlobalTransform)>,
-    windows: Query<(Entity, &Window)>,
     primary_window: Query<Entity, With<PrimaryWindow>>,
-    images: Res<Assets<Image>>,
     aabb_query: Query<(
         Entity,
         &Aabb,
