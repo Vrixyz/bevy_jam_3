@@ -9,7 +9,7 @@ use bevy_mod_picking::{events::EventListener, PickableBundle};
 use rand::thread_rng;
 use rand_chacha::ChaCha20Rng;
 
-use crate::{picking::AutoClick, picking::HighlightingMaterials, *};
+use crate::{picking::AutoClick, picking::HighlightingMaterials, picking_aabb::HalfExtents, *};
 
 pub const TIMER_BLOCKER_MULT: f32 = 0.2f32 / 10000f32;
 pub const TIMER_RESET_BLOCKER_FIXED: f32 = 0.5f32 / 1000f32;
@@ -97,10 +97,7 @@ pub(super) fn create_node(
             Blockers { entities: vec![] },
             ToBlock { entities: vec![] },
             highlights.node_materials_normal.clone(),
-            Aabb {
-                half_extents: Vec3A::splat(128f32),
-                center: Vec3A::default(),
-            }, //PickRaycastTarget::default(), // <- Needed for the raycast backend.
+            HalfExtents(Vec2::splat(128f32 / 2f32)),
         ))
         .id();
 
