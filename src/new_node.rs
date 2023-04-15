@@ -1,20 +1,16 @@
-use bevy::{
-    math::Vec3A,
-    prelude::*,
-    render::primitives::Aabb,
-    sprite::{MaterialMesh2dBundle, Mesh2dHandle},
-};
-use bevy_easings::{Ease, EaseFunction, EaseMethod, EasingType};
-use bevy_mod_picking::{events::EventListener, PickableBundle};
+use bevy::prelude::*;
+use bevy::sprite::{MaterialMesh2dBundle, Mesh2dHandle};
+use bevy_easings::{Ease, EaseMethod, EasingType};
+use bevy_mod_picking::PickableBundle;
 use rand::thread_rng;
 use rand_chacha::ChaCha20Rng;
 
 use crate::{picking::AutoClick, picking::HighlightingMaterials, picking_aabb::HalfExtents, *};
 
-pub const TIMER_BLOCKER_MULT: f32 = 0.2f32 / 10000f32;
-pub const TIMER_RESET_BLOCKER_FIXED: f32 = 0.5f32 / 1000f32;
-pub const TIMER_GAIN_MULT: f32 = 0.3f32 / 100000f32;
-pub const TIMER_GAIN_MULT_PER_LEVEL: f32 = 2f32 / 10000f32;
+pub const TIMER_BLOCKER_MULT: f32 = 0.2f32; // / 10000f32;
+pub const TIMER_RESET_BLOCKER_FIXED: f32 = 0.5f32; // / 1000f32;
+pub const TIMER_GAIN_MULT: f32 = 0.3f32; // / 100000f32;
+pub const TIMER_GAIN_MULT_PER_LEVEL: f32 = 2f32; // / 10000f32;
 
 pub struct NewNodeEvent(pub (Entity, i32));
 

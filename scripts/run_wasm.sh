@@ -3,7 +3,4 @@
 set -x
 set -eo pipefail
 
-PORT=8796
-
-echo http://localhost:$PORT/index.html
-static-web-server --port $PORT --root ./generated_wasm
+static-web-server --root ./generated_wasm -w scripts/static-web-server.toml
