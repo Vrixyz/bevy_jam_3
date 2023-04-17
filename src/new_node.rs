@@ -1,17 +1,16 @@
-use bevy::{
-    prelude::*,
-    sprite::{MaterialMesh2dBundle, Mesh2dHandle},
-};
-use bevy_easings::{Ease, EaseFunction, EaseMethod, EasingType};
+use bevy::prelude::*;
+use bevy::sprite::{MaterialMesh2dBundle, Mesh2dHandle};
+use bevy_easings::{Ease, EaseMethod, EasingType};
 use bevy_mod_picking::PickableBundle;
 use rand::thread_rng;
 use rand_chacha::ChaCha20Rng;
 
-use crate::{status_visual::AutoClick, *};
+use crate::{picking::AutoClick, picking::HighlightingMaterials, picking_aabb::HalfExtents, *};
 
-pub const TIMER_BLOCKER_MULT: f32 = 0.035f32 / 1000f32;
-pub const TIMER_RESET_BLOCKER_FIXED: f32 = 0.05f32;
-pub const TIMER_GAIN_MULT: f32 = 2.5f32 / 100000f32;
+pub const TIMER_BLOCKER_MULT: f32 = 0.2f32; // / 10000f32;
+pub const TIMER_RESET_BLOCKER_FIXED: f32 = 0.5f32; // / 1000f32;
+pub const TIMER_GAIN_MULT: f32 = 0.3f32; // / 100000f32;
+pub const TIMER_GAIN_MULT_PER_LEVEL: f32 = 2f32; // / 10000f32;
 
 pub struct NewNodeEvent(pub (Entity, i32));
 
@@ -40,19 +39,36 @@ pub fn create_node(
     commands: &mut Commands,
     mesh: Mesh2dHandle,
     map_assets: &MapAssets,
+    highlights: &HighlightingMaterials,
     pos: Vec2,
     duration: f32,
 ) -> Entity {
     let eye_catcher = commands.spawn(bundle_eye_catcher(map_assets, pos)).id();
     let ent = commands
-        .spawn(bundle_node(mesh, pos, map_assets, eye_catcher, duration))
+        .spawn(bundle_node(
+            mesh,
+            pos,
+            map_assets,
+            highlights,
+            eye_catcher,
+            duration,
+        ))
         .id();
     commands.entity(eye_catcher).insert(AutoClick(ent));
+    commands.spawn((
+        MaterialMesh2dBundle {
+            mesh: map_assets.mesh_gain.clone(),
+            material: Handle::<TimerMaterial>::default(),
+            transform: Transform::default().with_translation(pos.extend(11f32)),
+            ..default()
+        },
+        ButtonRef(ent),
+    ));
     commands.spawn((
         Text2dBundle {
             text: Text::from_section("", map_assets.text_style.clone())
                 .with_alignment(TextAlignment::Center),
-            transform: Transform::default().with_translation(pos.extend(10f32)),
+            transform: Transform::default().with_translation(pos.extend(1f32)),
             ..default()
         },
         ButtonRef(ent),
@@ -64,6 +80,7 @@ pub fn insert_node(
     commands: &mut Commands,
     mesh: Mesh2dHandle,
     map_assets: &MapAssets,
+    highlights: &HighlightingMaterials,
     pos: Vec2,
     duration: f32,
     entity: Entity,
@@ -71,14 +88,31 @@ pub fn insert_node(
     let eye_catcher = commands.spawn(bundle_eye_catcher(map_assets, pos)).id();
     let ent = commands
         .entity(entity)
-        .insert(bundle_node(mesh, pos, map_assets, eye_catcher, duration))
+        .insert(bundle_node(
+            mesh,
+            pos,
+            map_assets,
+            highlights,
+            eye_catcher,
+            duration,
+        ))
         .id();
     commands.entity(eye_catcher).insert(AutoClick(ent));
+    commands.spawn((
+        MaterialMesh2dBundle {
+            mesh: map_assets.mesh_gain.clone(),
+            material: Handle::<TimerMaterial>::default(),
+            transform: Transform::default().with_translation(pos.extend(11f32)),
+            ..default()
+        },
+        ButtonRef(ent),
+    ));
+
     commands.spawn((
         Text2dBundle {
             text: Text::from_section("", map_assets.text_style.clone())
                 .with_alignment(TextAlignment::Center),
-            transform: Transform::default().with_translation(pos.extend(10f32)),
+            transform: Transform::default().with_translation(pos.extend(1f32)),
             ..default()
         },
         ButtonRef(ent),
@@ -90,6 +124,7 @@ fn bundle_node(
     mesh: Mesh2dHandle,
     pos: Vec2,
     map_assets: &MapAssets,
+    highlights: &HighlightingMaterials,
     eye_catcher: Entity,
     duration: f32,
 ) -> (
@@ -102,7 +137,8 @@ fn bundle_node(
     SelfBlockStatus,
     Blockers,
     ToBlock,
-    Highlighting<ColorMaterial>,
+    HalfExtents,
+    HighlightOverride<ColorMaterial>,
 ) {
     (
         MaterialMesh2dBundle {
@@ -110,7 +146,7 @@ fn bundle_node(
             transform: Transform::default()
                 .with_translation(pos.extend(1f32))
                 .with_scale(Vec3::splat(128.)),
-            material: map_assets.node_materials_normal.initial.clone(),
+            material: highlights.mat_normal.clone(),
             ..default()
         },
         EyeCatcher(eye_catcher),
@@ -123,7 +159,8 @@ fn bundle_node(
         SelfBlockStatus { is_blocked: false },
         Blockers { entities: vec![] },
         ToBlock { entities: vec![] },
-        map_assets.node_materials_normal.clone(),
+        HalfExtents(Vec2::splat(128f32 / 2f32)),
+        highlights.node_materials_normal.clone(),
     )
 }
 
@@ -166,6 +203,7 @@ fn bundle_eye_catcher(
 pub fn new_button(
     mut commands: Commands,
     map_assets: Res<MapAssets>,
+    highlights: Res<HighlightingMaterials>,
     mut random_map: ResMut<RandomForMap>,
     mut events: EventReader<NewNodeEvent>,
     q_nodes: Query<(&Transform, Entity), With<BaseNode>>,
@@ -203,19 +241,20 @@ pub fn new_button(
             None => {}
             Some(pos) => {
                 let mut random_number = random_map.random.gen::<u32>() % 100;
-                let chance_to_no_room = if currencies.amount <= 1 { 0 } else { 20 };
+                let chance_to_no_room = if currencies.amount <= 1 { 0 } else { 30 };
                 if random_number < chance_to_no_room {
                     continue;
                 }
                 random_number -= chance_to_no_room;
                 existing_points.push(pos);
-                // 80 weight left?
+                // 70 weight left?
 
-                let node = if random_number < 55 {
+                let node = if random_number < 50 {
                     let node = create_node(
                         &mut commands,
                         map_assets.mesh_blocker.clone(),
                         &map_assets,
+                        &highlights,
                         Vec2::new(pos.0, pos.1),
                         event.0 .1 as f32 * TIMER_BLOCKER_MULT,
                     );
@@ -240,10 +279,11 @@ pub fn new_button(
                         &mut commands,
                         map_assets.mesh_gain.clone(),
                         &map_assets,
+                        &highlights,
                         Vec2::new(pos.0, pos.1),
-                        event.0 .1 as f32 * TIMER_GAIN_MULT,
+                        event.0 .1 as f32 * TIMER_GAIN_MULT + TIMER_GAIN_MULT_PER_LEVEL,
                     );
-                    commands.entity(node).insert(NodeCurrencyGain);
+                    commands.entity(node).insert(NodeCurrencyGain(1));
                     node
                 };
             }

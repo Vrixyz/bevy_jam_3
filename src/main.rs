@@ -4,22 +4,15 @@
 // Feel free to delete this line.
 #![allow(clippy::too_many_arguments, clippy::type_complexity)]
 
-use std::{ops::ControlFlow, time::Duration};
+use std::time::Duration;
 
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
-use bevy::{
-    ecs::system::EntityCommands,
-    input::common_conditions::input_toggle_active,
-    prelude::*,
-    sprite::{MaterialMesh2dBundle, Mesh2dHandle},
-    window::WindowResolution,
-};
+
+use bevy::{input::common_conditions::input_toggle_active, prelude::*, sprite::Mesh2dHandle};
 use bevy_easings::EasingsPlugin;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use bevy_mod_picking::{
-    DebugEventsPickingPlugin, DefaultPickingPlugins, Highlighting, PickableBundle,
-    PickingCameraBundle, PickingEvent, RaycastSource, UpdatePicks,
-};
+use bevy_mod_picking::events::PointerEvent;
+use bevy_mod_picking::prelude::*;
 use bevy_pancam::{PanCam, PanCamPlugin};
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 use idle_gains::Currency;
@@ -28,14 +21,26 @@ use persisted_game::GameLoader;
 use poisson::Poisson;
 use progress::Progress;
 use rand::{Rng, SeedableRng};
-use status_visual::{auto_click, update_status_visual};
 
 mod idle_gains;
 mod new_node;
 pub mod persisted_game;
+use picking::auto_click;
+use picking::HighlightingMaterials;
+use picking_aabb::AabbBackend;
+use progress::*;
+
+use status_visual::update_status_visual;
+
+//pub mod persisted_game;
+pub mod picking;
+mod picking_aabb;
 mod poisson;
 mod progress;
 mod status_visual;
+pub mod timer_material;
+
+use timer_material::{TimerMaterial, TimerMaterialPlugin, TimerMaterials};
 
 fn main() {
     App::new()
@@ -51,16 +56,23 @@ fn main() {
         .add_plugins(DefaultPickingPlugins) // <- Adds picking, interaction, and highlighting
         .add_plugin(GameLoader)
         .add_plugin(WorldInspectorPlugin::new())
+        .add_plugin(AabbBackend)
         //.add_plugin(DebugEventsPickingPlugin) // <- Adds debug event logging.
         .add_plugin(LogDiagnosticsPlugin::default())
         //.add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_plugin(PanCamPlugin::default())
         .add_plugin(DebugLinesPlugin::default())
         .add_plugin(EasingsPlugin)
+        .add_plugin(TimerMaterialPlugin)
         .add_event::<NewNodeEvent>()
         .add_event::<PropagateResetManualButtons>()
         .init_resource::<Currency>()
-        .add_startup_system(setup)
+        .add_startup_system(picking::setup)
+        .add_system(
+            setup
+                .in_schedule(CoreSchedule::Startup)
+                .in_base_set(StartupSet::PostStartup),
+        )
         .add_system(
             load.in_schedule(CoreSchedule::Startup)
                 .in_base_set(StartupSet::PostStartup),
@@ -72,8 +84,8 @@ fn main() {
         )*/
         .add_system(update_progress_timer)
         .add_system(update_progress_manual_auto_block)
-        .add_system(button_react)
-        .add_system(reset_manual_button_timers.after(button_react))
+        .add_system(picking::button_react)
+        .add_system(reset_manual_button_timers.after(picking::button_react))
         .add_system(button_manual_toggle_block_react)
         .add_system(new_button)
         .add_system(
@@ -83,6 +95,7 @@ fn main() {
         )
         .add_system(update_inherited_block_status.after(check_self_block))
         .add_system(update_progress_text.after(update_inherited_block_status))
+        .add_system(update_progress_material.after(update_inherited_block_status))
         .add_system(draw_relations.before(new_button))
         .add_system(update_status_visual.after(update_inherited_block_status))
         .add_system(
@@ -107,7 +120,7 @@ pub struct NodeManualBlockToggle {
     pub is_blocked: bool,
 }
 #[derive(Component)]
-pub struct NodeCurrencyGain;
+pub struct NodeCurrencyGain(pub u32);
 //
 
 /// To know which nodes are blocking our behaviour.
@@ -139,31 +152,25 @@ pub struct MapAssets {
     pub mesh_blocker: Mesh2dHandle,
     pub eye_catcher_mesh: Mesh2dHandle,
     pub eye_catcher_material: Handle<ColorMaterial>,
-    pub node_materials_normal: Highlighting<ColorMaterial>,
-    pub node_materials_blocked: Highlighting<ColorMaterial>,
 }
 
 fn setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
+    mut assets_timer: ResMut<Assets<TimerMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    currencies: ResMut<Currency>,
 ) {
     commands.insert_resource(RandomForMap::default());
     // 2d camera
     commands.spawn((
         Camera2dBundle::default(),
-        PickingCameraBundle {
-            source: RaycastSource::default(),
-            update: UpdatePicks::OnMouseEvent,
-        },
         PanCam::default(),
+        PickRaycastCamera::default(),
     ));
-
+    dbg!("setup main");
+    commands.spawn(TimerMaterials::new(&mut assets_timer, Color::GREEN, 180));
     let font = asset_server.load("fonts/FiraSans-Bold.ttf");
-    let mat_initial = materials.add(ColorMaterial::from(Color::WHITE));
-    let mat_initial_blocked = materials.add(ColorMaterial::from(Color::ANTIQUE_WHITE));
     let map_assets = MapAssets {
         font: font.clone(),
         text_style: TextStyle {
@@ -177,18 +184,6 @@ fn setup(
             .add(Mesh::from(shape::RegularPolygon::new(0.5f32, 6)))
             .into(),
         eye_catcher_material: materials.add(ColorMaterial::from(Color::YELLOW_GREEN)),
-        node_materials_normal: Highlighting {
-            initial: mat_initial.clone(),
-            hovered: Some(materials.add(ColorMaterial::from(Color::GRAY))),
-            pressed: Some(materials.add(ColorMaterial::from(Color::GREEN))),
-            selected: Some(mat_initial.clone()),
-        },
-        node_materials_blocked: Highlighting {
-            initial: mat_initial_blocked.clone(),
-            hovered: Some(materials.add(ColorMaterial::from(Color::DARK_GRAY))),
-            pressed: Some(materials.add(ColorMaterial::from(Color::DARK_GREEN))),
-            selected: Some(mat_initial_blocked.clone()),
-        },
     };
 
     commands.insert_resource(map_assets);
@@ -197,6 +192,7 @@ fn setup(
 fn spawn_map_empty(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
+    highlights: Res<HighlightingMaterials>,
     map_assets: Res<MapAssets>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
@@ -205,140 +201,31 @@ fn spawn_map_empty(
         &mut commands,
         map_assets.mesh_gain.clone(),
         &map_assets,
+        &highlights,
         Vec2::ZERO,
         0f32,
     );
-    commands.entity(button_entity).insert(NodeCurrencyGain);
-    commands.spawn((
-        Text2dBundle {
-            text: Text::from_section("translation", map_assets.text_style.clone())
-                .with_alignment(TextAlignment::Center),
-            transform: Transform::default().with_translation(Vec2::ZERO.extend(1f32)),
-            ..default()
-        },
-        ButtonRef(button_entity),
-    ));
-}
-
-fn update_progress_timer(
-    time: Res<Time>,
-    mut q_timer: Query<(
-        &mut Progress,
-        &InheritedBlockStatus,
-        Option<&NodeManualBlockToggle>,
-    )>,
-) {
-    for (mut t, status, manual) in q_timer.iter_mut() {
-        if let Some(manual) = manual {
-            if manual.is_blocked && status.is_blocked {
-                continue;
-            }
-        } else if status.is_blocked {
-            t.timer.tick(time.delta().div_f32(3f32));
-            continue;
-        }
-        t.timer.tick(time.delta());
-    }
-}
-fn update_progress_manual_auto_block(
-    currencies: Res<Currency>,
-    mut events_writer: EventWriter<NewNodeEvent>,
-    mut q_timer: Query<(Entity, &Progress, &mut NodeManualBlockToggle)>,
-) {
-    for (e, t, mut status) in q_timer.iter_mut() {
-        if t.timer.just_finished() {
-            status.is_blocked = true;
-            events_writer.send(NewNodeEvent((e, currencies.amount)));
-        }
-    }
-}
-
-fn update_progress_text(
-    mut q_texts: Query<(&mut Text, &ButtonRef)>,
-    q_timer: Query<
-        (
-            &Progress,
-            &InheritedBlockStatus,
-            &SelfBlockStatus,
-            Option<&NodeManualBlockToggle>,
-        ),
-        Or<(Changed<Progress>, Changed<InheritedBlockStatus>)>,
-    >,
-) {
-    for (mut t, b) in q_texts.iter_mut() {
-        match q_timer.get(b.0) {
-            Err(_) => {}
-            Ok((p, status, self_status, manual_toggle)) => {
-                let block_status = if status.is_blocked { " (blocked)" } else { "" };
-                if p.timer.finished() {
-                    let text = if manual_toggle.is_some() {
-                        if self_status.is_blocked {
-                            "Unblock"
-                        } else {
-                            "Block"
-                        }
-                        .into()
-                    } else {
-                        format!("Gain!{}", block_status)
-                    };
-                    t.sections[0].value = text;
-                } else {
-                    t.sections[0].value =
-                        format!("{:.0}s{}", p.timer.remaining_secs().ceil(), block_status);
-                }
-            }
-        }
-    }
-}
-
-fn button_react(
-    mut events: EventReader<PickingEvent>,
-    mut events_writer: EventWriter<NewNodeEvent>,
-    mut events_reset_writer: EventWriter<PropagateResetManualButtons>,
-    mut q_timer: Query<(&mut Progress, &InheritedBlockStatus), With<NodeCurrencyGain>>,
-    mut currencies: ResMut<Currency>,
-) {
-    for event in events.iter() {
-        if let PickingEvent::Clicked(e) = event {
-            let Ok((mut p, status)) = q_timer.get_mut(*e) else {
-                continue;
-            };
-            if !status.is_blocked && p.timer.finished() {
-                //dbg!("GAIN!");
-                currencies.amount += 1;
-                let new_time_duration = p.timer.duration().as_secs_f32() + currencies.amount as f32;
-                let new_time_duration = currencies.amount as f32 * TIMER_GAIN_MULT;
-                p.timer
-                    .set_duration(Duration::from_secs_f32(new_time_duration));
-                p.timer.reset();
-                events_writer.send(NewNodeEvent((*e, currencies.amount)));
-                events_reset_writer.send(PropagateResetManualButtons(*e));
-            } else {
-                dbg!("NOT READY");
-            }
-        }
-    }
+    commands.entity(button_entity).insert(NodeCurrencyGain(1));
 }
 
 fn button_manual_toggle_block_react(
-    mut events: EventReader<PickingEvent>,
+    mut events: EventReader<PointerEvent<Down>>,
     mut q_nodes: Query<(&Progress, &mut NodeManualBlockToggle, &InheritedBlockStatus)>,
 ) {
     for event in events.iter() {
-        if let PickingEvent::Clicked(e) = event {
-            let Ok((p, mut node, status)) = q_nodes.get_mut(*e) else {
-                continue;
-            };
-            if status.is_blocked {
-                //dbg!("node is blocked");
-                continue;
-            }
-            if p.timer.finished() {
-                //dbg!("toggle block!");
-                node.is_blocked = !node.is_blocked;
-            } else {
-                //dbg!("NOT READY");
-            }
+        let e = event.target();
+        let Ok((p, mut node, status)) = q_nodes.get_mut(e) else {
+            continue;
+        };
+        if status.is_blocked {
+            //dbg!("node is blocked");
+            continue;
+        }
+        if p.timer.finished() {
+            //dbg!("toggle block!");
+            node.is_blocked = !node.is_blocked;
+        } else {
+            //dbg!("NOT READY");
         }
     }
 }

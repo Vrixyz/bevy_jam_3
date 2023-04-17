@@ -5,7 +5,8 @@ use bevy::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    new_node::{create_node, insert_node, TIMER_BLOCKER_MULT},
+    new_node::{insert_node, TIMER_BLOCKER_MULT},
+    picking::HighlightingMaterials,
     Blockers, MapAssets, NodeCurrencyGain, NodeManualBlockToggle, SelfBlockStatus, ToBlock,
 };
 
@@ -21,7 +22,7 @@ impl Plugin for GameLoader {
 
 #[derive(Reflect, Serialize, Deserialize, Clone, Debug)]
 pub enum NodeType {
-    Gain,
+    Gain { level: u32 },
     Blocker { is_blocked: bool },
 }
 
@@ -47,7 +48,7 @@ pub fn load() -> Save {
         nodes: vec![
             SavedNode {
                 pos: Vec2::default(),
-                node_type: NodeType::Gain,
+                node_type: NodeType::Gain { level: 1 },
                 timer_seconds_duration: 2.0,
                 timer_seconds_left: 2.0,
                 to_block: vec![],
@@ -89,6 +90,7 @@ pub fn start_load(commands: &mut Commands, save: &Save) {
 fn load_system(
     mut commands: Commands,
     map_assets: Res<MapAssets>,
+    highlights: Res<HighlightingMaterials>,
     q_loading_nodes: Query<(Entity, &LoadingNodes)>,
     q_individual_node: Query<&LoadingNode>,
 ) {
@@ -117,6 +119,7 @@ fn load_system(
                         &mut commands,
                         map_assets.mesh_blocker.clone(),
                         &map_assets,
+                        &highlights,
                         loading_node.0.pos,
                         loading_node.0.timer_seconds_duration,
                         *e_node,
@@ -130,16 +133,17 @@ fn load_system(
                     commands.entity(*e_node).insert(blockers);
                     commands.entity(*e_node).insert(to_block);
                 }
-                NodeType::Gain => {
+                NodeType::Gain { level } => {
                     insert_node(
                         &mut commands,
                         map_assets.mesh_gain.clone(),
                         &map_assets,
+                        &highlights,
                         loading_node.0.pos,
                         loading_node.0.timer_seconds_duration,
                         *e_node,
                     );
-                    commands.entity(*e_node).insert(NodeCurrencyGain);
+                    commands.entity(*e_node).insert(NodeCurrencyGain(level));
 
                     commands.entity(*e_node).insert(blockers);
                     commands.entity(*e_node).insert(to_block);
