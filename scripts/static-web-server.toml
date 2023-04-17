@@ -1,6 +1,6 @@
 [general]
 host = "::"
-port = 8889
+port = 8080
 cache-control-headers = false
 page-fallback = "/public/index.html"
 
