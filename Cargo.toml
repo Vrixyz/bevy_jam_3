@@ -12,6 +12,10 @@ rand_chacha = "*"
 bevy_pancam = "*"
 bevy_prototype_debug_lines = "*"
 bevy_easings = "0.10"
+serde = "*"
+serde_json = "*"
+instant = "*"
+bevy-inspector-egui = "*"
 
 # Enable a small amount of optimization in debug mode
 [profile.dev]

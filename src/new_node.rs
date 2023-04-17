@@ -36,67 +36,131 @@ impl Default for RandomForMap {
     }
 }
 
-pub(super) fn create_node(
+pub fn create_node(
     commands: &mut Commands,
     mesh: Mesh2dHandle,
     map_assets: &MapAssets,
     pos: Vec2,
     duration: f32,
 ) -> Entity {
-    let eye_catcher = commands
-        .spawn((
-            MaterialMesh2dBundle {
-                mesh: map_assets.eye_catcher_mesh.clone(),
-                material: map_assets.eye_catcher_material.clone(),
-                visibility: Visibility::Hidden,
-                ..default()
-            },
+    let eye_catcher = commands.spawn(bundle_eye_catcher(map_assets, pos)).id();
+    let ent = commands
+        .spawn(bundle_node(mesh, pos, map_assets, eye_catcher, duration))
+        .id();
+    commands.entity(eye_catcher).insert(AutoClick(ent));
+    commands.spawn((
+        Text2dBundle {
+            text: Text::from_section("", map_assets.text_style.clone())
+                .with_alignment(TextAlignment::Center),
+            transform: Transform::default().with_translation(pos.extend(10f32)),
+            ..default()
+        },
+        ButtonRef(ent),
+    ));
+    ent
+}
+
+pub fn insert_node(
+    commands: &mut Commands,
+    mesh: Mesh2dHandle,
+    map_assets: &MapAssets,
+    pos: Vec2,
+    duration: f32,
+    entity: Entity,
+) -> Entity {
+    let eye_catcher = commands.spawn(bundle_eye_catcher(map_assets, pos)).id();
+    let ent = commands
+        .entity(entity)
+        .insert(bundle_node(mesh, pos, map_assets, eye_catcher, duration))
+        .id();
+    commands.entity(eye_catcher).insert(AutoClick(ent));
+    commands.spawn((
+        Text2dBundle {
+            text: Text::from_section("", map_assets.text_style.clone())
+                .with_alignment(TextAlignment::Center),
+            transform: Transform::default().with_translation(pos.extend(10f32)),
+            ..default()
+        },
+        ButtonRef(ent),
+    ));
+    ent
+}
+
+fn bundle_node(
+    mesh: Mesh2dHandle,
+    pos: Vec2,
+    map_assets: &MapAssets,
+    eye_catcher: Entity,
+    duration: f32,
+) -> (
+    MaterialMesh2dBundle<ColorMaterial>,
+    EyeCatcher,
+    PickableBundle,
+    Progress,
+    BaseNode,
+    InheritedBlockStatus,
+    SelfBlockStatus,
+    Blockers,
+    ToBlock,
+    Highlighting<ColorMaterial>,
+) {
+    (
+        MaterialMesh2dBundle {
+            mesh: mesh.clone(),
+            transform: Transform::default()
+                .with_translation(pos.extend(1f32))
+                .with_scale(Vec3::splat(128.)),
+            material: map_assets.node_materials_normal.initial.clone(),
+            ..default()
+        },
+        EyeCatcher(eye_catcher),
+        PickableBundle::default(),
+        Progress {
+            timer: Timer::from_seconds(duration, TimerMode::Once),
+        },
+        BaseNode,
+        InheritedBlockStatus { is_blocked: false },
+        SelfBlockStatus { is_blocked: false },
+        Blockers { entities: vec![] },
+        ToBlock { entities: vec![] },
+        map_assets.node_materials_normal.clone(),
+    )
+}
+
+fn bundle_eye_catcher(
+    map_assets: &MapAssets,
+    pos: Vec2,
+) -> (
+    MaterialMesh2dBundle<ColorMaterial>,
+    bevy_easings::EasingComponent<Transform>,
+) {
+    (
+        MaterialMesh2dBundle {
+            mesh: map_assets.eye_catcher_mesh.clone(),
+            material: map_assets.eye_catcher_material.clone(),
+            visibility: Visibility::Hidden,
+            ..default()
+        },
+        Transform {
+            translation: pos.extend(0f32),
+            scale: Vec3::splat(160.),
+            rotation: Quat::from_axis_angle(Vec3::Z, 0f32),
+            ..default()
+        }
+        .ease_to(
             Transform {
                 translation: pos.extend(0f32),
                 scale: Vec3::splat(160.),
-                rotation: Quat::from_axis_angle(Vec3::Z, 0f32),
-                ..default()
-            }
-            .ease_to(
-                Transform {
-                    translation: pos.extend(0f32),
-                    scale: Vec3::splat(160.),
-                    rotation: Quat::from_axis_angle(Vec3::Z, 6f32 / 12f32 * std::f32::consts::TAU),
-                    ..default()
-                },
-                EaseMethod::Linear,
-                EasingType::Loop {
-                    duration: std::time::Duration::from_millis(1000),
-                    pause: Some(std::time::Duration::from_millis(0)),
-                },
-            ),
-        ))
-        .id();
-    let ent = commands
-        .spawn((
-            MaterialMesh2dBundle {
-                mesh: mesh.clone(),
-                transform: Transform::default()
-                    .with_translation(pos.extend(1f32))
-                    .with_scale(Vec3::splat(128.)),
-                material: map_assets.node_materials_normal.initial.clone(),
+                rotation: Quat::from_axis_angle(Vec3::Z, 6f32 / 12f32 * std::f32::consts::TAU),
                 ..default()
             },
-            EyeCatcher(eye_catcher),
-            PickableBundle::default(),
-            Progress {
-                timer: Timer::from_seconds(duration, TimerMode::Once),
+            EaseMethod::Linear,
+            EasingType::Loop {
+                duration: std::time::Duration::from_millis(1000),
+                pause: Some(std::time::Duration::from_millis(0)),
             },
-            BaseNode,
-            InheritedBlockStatus { is_blocked: false },
-            SelfBlockStatus { is_blocked: false },
-            Blockers { entities: vec![] },
-            ToBlock { entities: vec![] },
-            map_assets.node_materials_normal.clone(),
-        ))
-        .id();
-    commands.entity(eye_catcher).insert(AutoClick(ent));
-    ent
+        ),
+    )
 }
 
 pub fn new_button(
@@ -182,17 +246,6 @@ pub fn new_button(
                     commands.entity(node).insert(NodeCurrencyGain);
                     node
                 };
-
-                commands.spawn((
-                    Text2dBundle {
-                        text: Text::from_section("", map_assets.text_style.clone())
-                            .with_alignment(TextAlignment::Center),
-                        transform: Transform::default()
-                            .with_translation(Vec2::new(pos.0, pos.1).extend(10f32)),
-                        ..default()
-                    },
-                    ButtonRef(node),
-                ));
             }
         }
     }

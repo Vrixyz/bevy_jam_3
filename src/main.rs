@@ -15,6 +15,7 @@ use bevy::{
     window::WindowResolution,
 };
 use bevy_easings::EasingsPlugin;
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_mod_picking::{
     DebugEventsPickingPlugin, DefaultPickingPlugins, Highlighting, PickableBundle,
     PickingCameraBundle, PickingEvent, RaycastSource, UpdatePicks,
@@ -23,23 +24,23 @@ use bevy_pancam::{PanCam, PanCamPlugin};
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 use idle_gains::Currency;
 use new_node::*;
+use persisted_game::GameLoader;
 use poisson::Poisson;
 use progress::Progress;
-use rand::{thread_rng, Rng, SeedableRng};
-use rand_chacha::ChaCha20Rng;
+use rand::{Rng, SeedableRng};
 use status_visual::{auto_click, update_status_visual};
 
 mod idle_gains;
 mod new_node;
-//pub mod persisted_game;
+pub mod persisted_game;
 mod poisson;
 mod progress;
 mod status_visual;
 
 fn main() {
-    //persisted_game::save();
-    //return;
     App::new()
+        .register_type::<Blockers>()
+        .register_type::<ToBlock>()
         .add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 //resolution: WindowResolution::new(640., 640.).with_scale_factor_override(1.0),
@@ -48,9 +49,11 @@ fn main() {
             ..default()
         }))
         .add_plugins(DefaultPickingPlugins) // <- Adds picking, interaction, and highlighting
+        .add_plugin(GameLoader)
+        .add_plugin(WorldInspectorPlugin::new())
         //.add_plugin(DebugEventsPickingPlugin) // <- Adds debug event logging.
         .add_plugin(LogDiagnosticsPlugin::default())
-        .add_plugin(FrameTimeDiagnosticsPlugin::default())
+        //.add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_plugin(PanCamPlugin::default())
         .add_plugin(DebugLinesPlugin::default())
         .add_plugin(EasingsPlugin)
@@ -58,6 +61,15 @@ fn main() {
         .add_event::<PropagateResetManualButtons>()
         .init_resource::<Currency>()
         .add_startup_system(setup)
+        .add_system(
+            load.in_schedule(CoreSchedule::Startup)
+                .in_base_set(StartupSet::PostStartup),
+        )
+        /*        .add_system(
+            spawn_map_empty
+                .in_schedule(CoreSchedule::Startup)
+                .in_base_set(StartupSet::PostStartup),
+        )*/
         .add_system(update_progress_timer)
         .add_system(update_progress_manual_auto_block)
         .add_system(button_react)
@@ -81,6 +93,10 @@ fn main() {
         .run();
 }
 
+fn load(mut commands: Commands) {
+    persisted_game::start_load(&mut commands, &persisted_game::load());
+}
+
 #[derive(Component)]
 pub struct ButtonRef(pub Entity);
 
@@ -95,13 +111,13 @@ pub struct NodeCurrencyGain;
 //
 
 /// To know which nodes are blocking our behaviour.
-#[derive(Component)]
+#[derive(Reflect, Component)]
 pub struct Blockers {
     pub entities: Vec<Entity>,
 }
 
 /// To know which nodes to block.
-#[derive(Component)]
+#[derive(Reflect, Component)]
 pub struct ToBlock {
     pub entities: Vec<Entity>,
 }
@@ -175,12 +191,22 @@ fn setup(
         },
     };
 
+    commands.insert_resource(map_assets);
+}
+
+fn spawn_map_empty(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    map_assets: Res<MapAssets>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
     let button_entity = create_node(
         &mut commands,
         map_assets.mesh_gain.clone(),
         &map_assets,
         Vec2::ZERO,
-        currencies.amount as f32,
+        0f32,
     );
     commands.entity(button_entity).insert(NodeCurrencyGain);
     commands.spawn((
@@ -192,8 +218,6 @@ fn setup(
         },
         ButtonRef(button_entity),
     ));
-
-    commands.insert_resource(map_assets);
 }
 
 fn update_progress_timer(
