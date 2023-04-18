@@ -1,12 +1,14 @@
 use bevy::{
     input::common_conditions::{input_just_pressed, input_toggle_active},
     prelude::*,
+    utils::HashMap,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    new_node::{insert_node, TIMER_BLOCKER_MULT},
+    new_node::{insert_node, BaseNode, TIMER_BLOCKER_MULT},
     picking::HighlightingMaterials,
+    progress::Progress,
     Blockers, MapAssets, NodeCurrencyGain, NodeManualBlockToggle, SelfBlockStatus, ToBlock,
 };
 
@@ -17,6 +19,7 @@ impl Plugin for GameLoader {
         app.register_type::<LoadingNode>();
         app.register_type::<LoadingNodes>();
         app.add_system(load_system);
+        app.add_system(save.run_if(input_just_pressed(KeyCode::S)));
     }
 }
 
@@ -67,9 +70,62 @@ pub fn load() -> Save {
     let j = serde_json::to_string(&data).unwrap();
     println!("{}", j);
 
+    let j = r#"{"last_tick_time_since2023":2.0,"nodes":[{"pos":[0.0,0.0],"node_type":{"Gain":{"level":2}},"timer_seconds_duration":3.2,"timer_seconds_left":3.044175,"to_block":[],"blockers":[4,7]},{"pos":[-44.699467,424.95117],"node_type":{"Gain":{"level":3}},"timer_seconds_duration":4.6,"timer_seconds_left":0.0,"to_block":[],"blockers":[5]},{"pos":[29.254093,610.78674],"node_type":{"Gain":{"level":3}},"timer_seconds_duration":5.5,"timer_seconds_left":5.364157,"to_block":[],"blockers":[9]},{"pos":[-147.21008,964.9743],"node_type":{"Gain":{"level":2}},"timer_seconds_duration":3.8000002,"timer_seconds_left":1.9001417,"to_block":[],"blockers":[]},{"pos":[0.0,230.0],"node_type":{"Blocker":{"is_blocked":true}},"timer_seconds_duration":0.5,"timer_seconds_left":0.0,"to_block":[0],"blockers":[8]},{"pos":[-181.68568,570.68646],"node_type":{"Blocker":{"is_blocked":false}},"timer_seconds_duration":0.4,"timer_seconds_left":0.0,"to_block":[1],"blockers":[6]},{"pos":[-193.33986,770.3566],"node_type":{"Blocker":{"is_blocked":false}},"timer_seconds_duration":0.6,"timer_seconds_left":0.0,"to_block":[5],"blockers":[]},{"pos":[-199.9941,2.5221765],"node_type":{"Blocker":{"is_blocked":true}},"timer_seconds_duration":0.8,"timer_seconds_left":0.0,"to_block":[0],"blockers":[10]},{"pos":[199.91447,223.81909],"node_type":{"Blocker":{"is_blocked":true}},"timer_seconds_duration":0.8,"timer_seconds_left":0.0,"to_block":[4],"blockers":[11]},{"pos":[183.67923,483.67703],"node_type":{"Blocker":{"is_blocked":true}},"timer_seconds_duration":1.0,"timer_seconds_left":0.0,"to_block":[2],"blockers":[]},{"pos":[-274.4962,188.13853],"node_type":{"Blocker":{"is_blocked":true}},"timer_seconds_duration":1.0,"timer_seconds_left":0.0,"to_block":[7],"blockers":[12]},{"pos":[198.78012,23.812317],"node_type":{"Blocker":{"is_blocked":true}},"timer_seconds_duration":1.2,"timer_seconds_left":0.0,"to_block":[8],"blockers":[]},{"pos":[-283.67746,387.93768],"node_type":{"Blocker":{"is_blocked":true}},"timer_seconds_duration":1.2,"timer_seconds_left":0.0,"to_block":[10],"blockers":[13]},{"pos":[-448.68988,500.9638],"node_type":{"Blocker":{"is_blocked":true}},"timer_seconds_duration":1.2,"timer_seconds_left":1.1166811,"to_block":[12],"blockers":[]}]}"#;
+
     let game_loaded: Save = serde_json::from_str(&j).unwrap();
     println!("{:?}", game_loaded);
     game_loaded
+}
+
+pub fn save(
+    q_nodes: Query<
+        (
+            Entity,
+            &Transform,
+            &Progress,
+            Option<&NodeCurrencyGain>,
+            &SelfBlockStatus,
+            &ToBlock,
+            &Blockers,
+        ),
+        With<BaseNode>,
+    >,
+) {
+    let mut node_entities_index: HashMap<Entity, usize> = HashMap::new();
+    for (i, (e, _, _, _, _, _, _)) in q_nodes.iter().enumerate() {
+        node_entities_index.insert(e, i);
+    }
+    let mut nodes = Vec::new();
+
+    for (e, transform, progress, gain, self_status, to_block, blockers) in q_nodes.iter() {
+        nodes.push(SavedNode {
+            pos: transform.translation.truncate(),
+            node_type: match gain {
+                Some(g) => NodeType::Gain { level: g.0 },
+                None => NodeType::Blocker {
+                    is_blocked: self_status.is_blocked,
+                },
+            },
+            timer_seconds_duration: progress.timer.duration().as_secs_f32(),
+            timer_seconds_left: progress.timer.remaining_secs(),
+            to_block: to_block
+                .entities
+                .iter()
+                .map(|b| node_entities_index[&b])
+                .collect(),
+            blockers: blockers
+                .entities
+                .iter()
+                .map(|b| node_entities_index[&b])
+                .collect(),
+        });
+    }
+    let data = Save {
+        last_tick_time_since2023: 2f32,
+        nodes,
+    };
+    let j = serde_json::to_string(&data).unwrap();
+    println!("{}", j);
 }
 
 #[derive(Reflect, Component)]
