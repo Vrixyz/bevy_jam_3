@@ -4,9 +4,6 @@
 #![allow(clippy::too_many_arguments)]
 #![deny(missing_docs)]
 
-use std::cmp::Ordering;
-
-use bevy::render::primitives::Aabb;
 use bevy::ui::FocusPolicy;
 use bevy::{prelude::*, window::PrimaryWindow};
 use bevy_picking_core::backend::prelude::*;
@@ -62,7 +59,7 @@ pub fn half_extents_picking(
         let mut blocked = false;
         let (camera_entity, camera, camera_transform) = cameras
             .iter()
-            .find(|(_entity, camera, global_transform)| {
+            .find(|(_entity, camera, _global_transform)| {
                 camera
                     .target
                     .normalize(Some(primary_window.single()))
@@ -74,7 +71,7 @@ pub fn half_extents_picking(
 
         let Some(cursor_position) = camera
             .viewport_to_world(camera_transform, cursor_position)
-            .and_then(|ray| Some(ray.get_point(0f32))) else {
+            .map(|ray| ray.get_point(0f32)) else {
                 continue;
             };
         let over_list = data_query

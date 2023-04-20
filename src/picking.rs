@@ -1,29 +1,10 @@
 use crate::*;
-use bevy::prelude::*;
+
 use bevy::utils::Uuid;
-use bevy_mod_picking::prelude::*;
+
 use bevy_picking_core::backend::PickData;
 use bevy_picking_core::events::PointerEvent;
 use bevy_picking_highlight::*;
-
-const HIGHLIGHT_NORMAL: HighlightOverride<ColorMaterial> = HighlightOverride {
-    hovered: Some(HighlightKind::new_dynamic(|matl| {
-        ColorMaterial::from(Color::GRAY)
-    })),
-    pressed: Some(HighlightKind::new_dynamic(|matl| {
-        ColorMaterial::from(Color::GREEN)
-    })),
-    selected: Some(HighlightKind::new_dynamic(|matl| matl.clone())),
-};
-const HIGHLIGHT_BLOCKED: HighlightOverride<ColorMaterial> = HighlightOverride {
-    hovered: Some(HighlightKind::new_dynamic(|matl| {
-        ColorMaterial::from(Color::DARK_GRAY)
-    })),
-    pressed: Some(HighlightKind::new_dynamic(|matl| {
-        ColorMaterial::from(Color::DARK_GREEN)
-    })),
-    selected: Some(HighlightKind::new_dynamic(|matl| matl.clone())),
-};
 
 #[derive(Resource)]
 pub struct HighlightingMaterials {
@@ -96,7 +77,6 @@ pub struct AutoClick(pub Entity);
 pub fn auto_click(
     mut events: EventWriter<PointerEvent<Down>>,
     q_autoclick: Query<(&Visibility, &AutoClick)>,
-    mut q_interact: Query<&mut Interaction>,
 ) {
     for (v, auto_click) in q_autoclick.iter() {
         if v == Visibility::Visible {

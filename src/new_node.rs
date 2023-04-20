@@ -45,14 +45,7 @@ pub fn create_node(
 ) -> Entity {
     let eye_catcher = commands.spawn(bundle_eye_catcher(map_assets, pos)).id();
     let ent = commands
-        .spawn(bundle_node(
-            mesh,
-            pos,
-            map_assets,
-            highlights,
-            eye_catcher,
-            duration,
-        ))
+        .spawn(bundle_node(mesh, pos, highlights, eye_catcher, duration))
         .id();
     commands.entity(eye_catcher).insert(AutoClick(ent));
     commands.spawn((
@@ -88,14 +81,7 @@ pub fn insert_node(
     let eye_catcher = commands.spawn(bundle_eye_catcher(map_assets, pos)).id();
     let ent = commands
         .entity(entity)
-        .insert(bundle_node(
-            mesh,
-            pos,
-            map_assets,
-            highlights,
-            eye_catcher,
-            duration,
-        ))
+        .insert(bundle_node(mesh, pos, highlights, eye_catcher, duration))
         .id();
     commands.entity(eye_catcher).insert(AutoClick(ent));
     commands.spawn((
@@ -123,7 +109,6 @@ pub fn insert_node(
 fn bundle_node(
     mesh: Mesh2dHandle,
     pos: Vec2,
-    map_assets: &MapAssets,
     highlights: &HighlightingMaterials,
     eye_catcher: Entity,
     duration: f32,
@@ -249,7 +234,7 @@ pub fn new_button(
                 existing_points.push(pos);
                 // 70 weight left?
 
-                let node = if random_number < 50 {
+                let _node = if random_number < 50 {
                     let node = create_node(
                         &mut commands,
                         map_assets.mesh_blocker.clone(),

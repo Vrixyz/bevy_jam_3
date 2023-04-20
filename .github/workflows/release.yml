@@ -6,7 +6,7 @@ on:
       - "*"
 
 env:
-  binary: Sidle_Ffect
+  binary: sidle_ffect
   add_binaries_to_github_release: true
   itch_target: vrixyz/sidleffect
 

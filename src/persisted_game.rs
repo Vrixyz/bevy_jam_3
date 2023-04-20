@@ -1,13 +1,9 @@
-use bevy::{
-    input::common_conditions::{input_just_pressed, input_toggle_active},
-    prelude::*,
-    utils::HashMap,
-};
+use bevy::{input::common_conditions::input_just_pressed, prelude::*, utils::HashMap};
 use bevy_pkv::PkvStore;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    new_node::{insert_node, BaseNode, EyeCatcher, TIMER_BLOCKER_MULT},
+    new_node::{insert_node, BaseNode, EyeCatcher},
     picking::HighlightingMaterials,
     progress::Progress,
     Blockers, ButtonRef, MapAssets, NodeCurrencyGain, NodeManualBlockToggle, SelfBlockStatus,
@@ -76,11 +72,10 @@ pub fn load(pkv: &Res<PkvStore>) -> Result<Save, String> {
             },
         ],
     };
-    let mut save = pkv.get::<Save>("game").unwrap_or_else(|err| {
-        let data = get_default_save();
-        data
-    });
-    if save.nodes.len() == 0 {
+    let mut save = pkv
+        .get::<Save>("game")
+        .unwrap_or_else(|_err| get_default_save());
+    if save.nodes.is_empty() {
         save = get_default_save();
     }
     Ok(save)
@@ -107,7 +102,7 @@ pub fn save(
     }
     let mut nodes = Vec::new();
 
-    for (e, transform, progress, gain, self_status, to_block, blockers) in q_nodes.iter() {
+    for (_e, transform, progress, gain, self_status, to_block, blockers) in q_nodes.iter() {
         nodes.push(SavedNode {
             pos: transform.translation.truncate(),
             node_type: match gain {

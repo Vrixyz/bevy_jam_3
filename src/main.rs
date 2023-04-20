@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 
-use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
+use bevy::diagnostic::LogDiagnosticsPlugin;
 
 use bevy::input::common_conditions::input_just_pressed;
 use bevy::{input::common_conditions::input_toggle_active, prelude::*, sprite::Mesh2dHandle};
@@ -28,7 +28,7 @@ mod idle_gains;
 mod new_node;
 pub mod persisted_game;
 use picking::auto_click;
-use picking::HighlightingMaterials;
+
 use picking_aabb::AabbBackend;
 use progress::*;
 
@@ -229,17 +229,15 @@ fn check_self_block(
 }
 
 fn update_inherited_block_status(
-    mut commands: Commands,
-    map_assets: Res<MapAssets>,
-    mut q_blockers: Query<(&Blockers, &ToBlock, Entity), With<BaseNode>>,
-    mut q_blockStatus: Query<(&mut InheritedBlockStatus, &SelfBlockStatus), With<BaseNode>>,
+    q_blockers: Query<(&Blockers, &ToBlock, Entity), With<BaseNode>>,
+    mut q_block_status: Query<(&mut InheritedBlockStatus, &SelfBlockStatus), With<BaseNode>>,
 ) {
-    for (mut inherited_status, _) in q_blockStatus.iter_mut() {
+    for (mut inherited_status, _) in q_block_status.iter_mut() {
         inherited_status.is_blocked = false;
     }
     for (blockers, to_blocks, e) in q_blockers.iter() {
         if blockers.entities.is_empty() {
-            recurse_block(&q_blockers, &mut q_blockStatus, e, false, to_blocks);
+            recurse_block(&q_blockers, &mut q_block_status, e, false, to_blocks);
         }
     }
 }
@@ -273,9 +271,8 @@ fn recurse_block(
 pub struct PropagateResetManualButtons(pub Entity);
 
 fn reset_manual_button_timers(
-    currencies: Res<Currency>,
     mut events: EventReader<PropagateResetManualButtons>,
-    mut q_blockers: Query<(&Blockers, Entity), With<BaseNode>>,
+    q_blockers: Query<(&Blockers, Entity), With<BaseNode>>,
     mut q_manual_node: Query<
         (
             &mut NodeManualBlockToggle,
@@ -286,13 +283,12 @@ fn reset_manual_button_timers(
     >,
 ) {
     for e in events.iter() {
-        recurse_reset_manual(&e.0, &currencies, &mut q_manual_node, &q_blockers);
+        recurse_reset_manual(&e.0, &mut q_manual_node, &q_blockers);
     }
 }
 
 fn recurse_reset_manual(
     e: &Entity,
-    currencies: &Res<Currency>,
     q_manual_node: &mut Query<
         (
             &mut NodeManualBlockToggle,
@@ -315,7 +311,7 @@ fn recurse_reset_manual(
         return;
     };
     for child in blockers.0.entities.iter() {
-        recurse_reset_manual(child, currencies, q_manual_node, q_blockers);
+        recurse_reset_manual(child, q_manual_node, q_blockers);
     }
 }
 

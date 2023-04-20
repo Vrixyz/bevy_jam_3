@@ -97,10 +97,10 @@ pub fn update_progress_material(
     >,
 ) {
     let timer_materials = q_timer_materials.single();
-    for (b) in q_mat.iter() {
+    for b in q_mat.iter() {
         match q_timer.get(b.0) {
             Err(_) => {}
-            Ok((p, status, self_status, manual_toggle)) => {
+            Ok((p, _status, _self_status, _manual_toggle)) => {
                 if p.timer.finished() {
                     // nope
                     if p.timer.just_finished() {

@@ -3,7 +3,7 @@
 set -x
 set -eo pipefail
 
-BINARY_NAME=Sidle_Ffect
+BINARY_NAME=sidle_ffect
 
 cargo build --bin $BINARY_NAME --profile profile --target wasm32-unknown-unknown
 cp -r wasm/* generated_wasm/

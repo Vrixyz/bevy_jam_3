@@ -1,11 +1,11 @@
-use bevy::{prelude::*, sprite::Mesh2dHandle};
+use bevy::{prelude::*};
 use bevy_picking_highlight::*;
 
 use crate::{
     new_node::EyeCatcher,
     picking::HighlightingMaterials,
-    progress::{self, Progress},
-    InheritedBlockStatus, MapAssets, NodeManualBlockToggle, SelfBlockStatus,
+    progress::{Progress},
+    InheritedBlockStatus, NodeManualBlockToggle, SelfBlockStatus,
 };
 
 pub fn update_status_visual(

@@ -8,7 +8,7 @@ impl Poisson {
     }
     pub fn compute_new_position(
         &self,
-        existing_points: &Vec<(f32, f32)>,
+        existing_points: &[(f32, f32)],
         near_point: &(f32, f32),
         radius: f32,
         nb_attempts: u32,
@@ -19,8 +19,8 @@ impl Poisson {
         let radius_plus_epsilon = radius + EPSILON;
         let radius_squared = radius * radius;
         for attempt_amount in 0..nb_attempts {
-            let theta = std::f32::consts::TAU
-                * (seed as f32 + attempt_amount as f32 / (nb_attempts as f32));
+            let theta =
+                std::f32::consts::TAU * (seed + attempt_amount as f32 / (nb_attempts as f32));
             let test_point = (
                 near_point.0 + radius_plus_epsilon * theta.cos(),
                 near_point.1 + radius_plus_epsilon * theta.sin(),

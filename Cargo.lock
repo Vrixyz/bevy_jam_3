@@ -3,28 +3,6 @@
 version = 3
 
 [[package]]
-name = "Sidle_Ffect"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "bevy-inspector-egui",
- "bevy_easings",
- "bevy_mod_picking",
- "bevy_pancam",
- "bevy_picking_core",
- "bevy_picking_highlight",
- "bevy_picking_input",
- "bevy_picking_sprite",
- "bevy_pkv",
- "bevy_prototype_debug_lines",
- "instant",
- "rand",
- "rand_chacha",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "ab_glyph"
 version = "0.2.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3196,6 +3174,28 @@ name = "shlex"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43b2853a4d09f215c24cc5489c992ce46052d359b5109343cbafbf26bc62f8a3"
+
+[[package]]
+name = "sidle_ffect"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy-inspector-egui",
+ "bevy_easings",
+ "bevy_mod_picking",
+ "bevy_pancam",
+ "bevy_picking_core",
+ "bevy_picking_highlight",
+ "bevy_picking_input",
+ "bevy_picking_sprite",
+ "bevy_pkv",
+ "bevy_prototype_debug_lines",
+ "instant",
+ "rand",
+ "rand_chacha",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "slab"
