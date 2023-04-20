@@ -8,12 +8,14 @@ use std::time::Duration;
 
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 
+use bevy::input::common_conditions::input_just_pressed;
 use bevy::{input::common_conditions::input_toggle_active, prelude::*, sprite::Mesh2dHandle};
 use bevy_easings::EasingsPlugin;
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_mod_picking::events::PointerEvent;
 use bevy_mod_picking::prelude::*;
 use bevy_pancam::{PanCam, PanCamPlugin};
+use bevy_pkv::PkvStore;
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
 use idle_gains::Currency;
 use new_node::*;
@@ -77,6 +79,7 @@ fn main() {
             load.in_schedule(CoreSchedule::Startup)
                 .in_base_set(StartupSet::PostStartup),
         )
+        .add_system(load.run_if(input_just_pressed(KeyCode::L)))
         /*        .add_system(
             spawn_map_empty
                 .in_schedule(CoreSchedule::Startup)
@@ -106,8 +109,11 @@ fn main() {
         .run();
 }
 
-fn load(mut commands: Commands) {
-    persisted_game::start_load(&mut commands, &persisted_game::load());
+fn load(mut commands: Commands, pkv: Res<PkvStore>) {
+    let Ok(to_load) = persisted_game::load(&pkv) else {
+        return;
+    };
+    persisted_game::start_load(&mut commands, &to_load);
 }
 
 #[derive(Component)]
@@ -187,25 +193,6 @@ fn setup(
     };
 
     commands.insert_resource(map_assets);
-}
-
-fn spawn_map_empty(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    highlights: Res<HighlightingMaterials>,
-    map_assets: Res<MapAssets>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-) {
-    let button_entity = create_node(
-        &mut commands,
-        map_assets.mesh_gain.clone(),
-        &map_assets,
-        &highlights,
-        Vec2::ZERO,
-        0f32,
-    );
-    commands.entity(button_entity).insert(NodeCurrencyGain(1));
 }
 
 fn button_manual_toggle_block_react(

@@ -19,6 +19,7 @@ bevy_easings = "0.10"
 serde = "*"
 serde_json = "*"
 instant = "*"
+bevy_pkv = "*"
 bevy-inspector-egui = "*"
 
 # Enable a small amount of optimization in debug mode
@@ -32,6 +33,12 @@ opt-level = 3
 [profile.profile]
 inherits = "release"
 debug = 1
+
+[profile.dd]
+inherits = "dev"
+
+[profile.dd.package."*"]
+opt-level = 1
 
 [profile.wasm-release]
 inherits = "release"
