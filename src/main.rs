@@ -27,7 +27,7 @@ use rand::{Rng, SeedableRng};
 mod idle_gains;
 mod new_node;
 pub mod persisted_game;
-use picking::auto_click;
+use picking::{auto_click, node_manual_toggle_block_react, node_save_react};
 
 use picking_aabb::AabbBackend;
 use progress::*;
@@ -87,9 +87,10 @@ fn main() {
         )*/
         .add_system(update_progress_timer)
         .add_system(update_progress_manual_auto_block)
-        .add_system(picking::button_react)
-        .add_system(reset_manual_button_timers.after(picking::button_react))
-        .add_system(button_manual_toggle_block_react)
+        .add_system(picking::node_gain_react)
+        .add_system(reset_manual_button_timers.after(picking::node_gain_react))
+        .add_system(node_manual_toggle_block_react)
+        .add_system(node_save_react)
         .add_system(new_button)
         .add_system(
             check_self_block
@@ -126,7 +127,14 @@ pub struct NodeManualBlockToggle {
     pub is_blocked: bool,
 }
 #[derive(Component)]
-pub struct NodeCurrencyGain(pub u32);
+pub struct NodeCurrencyGain {
+    level: u32,
+}
+
+#[derive(Component)]
+pub struct NodeSave {
+    level: u32,
+}
 //
 
 /// To know which nodes are blocking our behaviour.
@@ -155,6 +163,7 @@ pub struct MapAssets {
     pub font: Handle<Font>,
     pub text_style: TextStyle,
     pub mesh_gain: Mesh2dHandle,
+    pub mesh_save: Mesh2dHandle,
     pub mesh_blocker: Mesh2dHandle,
     pub eye_catcher_mesh: Mesh2dHandle,
     pub eye_catcher_material: Handle<ColorMaterial>,
@@ -186,6 +195,9 @@ fn setup(
         },
         mesh_gain: meshes.add(Mesh::from(shape::Circle::default())).into(),
         mesh_blocker: meshes.add(Mesh::from(shape::Quad::default())).into(),
+        mesh_save: meshes
+            .add(Mesh::from(shape::RegularPolygon::new(0.5f32, 3)))
+            .into(),
         eye_catcher_mesh: meshes
             .add(Mesh::from(shape::RegularPolygon::new(0.5f32, 6)))
             .into(),
@@ -193,28 +205,6 @@ fn setup(
     };
 
     commands.insert_resource(map_assets);
-}
-
-fn button_manual_toggle_block_react(
-    mut events: EventReader<PointerEvent<Down>>,
-    mut q_nodes: Query<(&Progress, &mut NodeManualBlockToggle, &InheritedBlockStatus)>,
-) {
-    for event in events.iter() {
-        let e = event.target();
-        let Ok((p, mut node, status)) = q_nodes.get_mut(e) else {
-            continue;
-        };
-        if status.is_blocked {
-            //dbg!("node is blocked");
-            continue;
-        }
-        if p.timer.finished() {
-            //dbg!("toggle block!");
-            node.is_blocked = !node.is_blocked;
-        } else {
-            //dbg!("NOT READY");
-        }
-    }
 }
 
 fn check_self_block(

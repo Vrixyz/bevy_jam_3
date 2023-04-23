@@ -6,8 +6,8 @@ use crate::{
     new_node::{insert_node, BaseNode, EyeCatcher},
     picking::HighlightingMaterials,
     progress::Progress,
-    Blockers, ButtonRef, MapAssets, NodeCurrencyGain, NodeManualBlockToggle, SelfBlockStatus,
-    ToBlock,
+    Blockers, ButtonRef, MapAssets, NodeCurrencyGain, NodeManualBlockToggle, NodeSave,
+    SelfBlockStatus, ToBlock,
 };
 
 pub struct GameLoader;
@@ -31,6 +31,7 @@ impl Plugin for GameLoader {
 #[derive(Reflect, Serialize, Deserialize, Clone, Debug)]
 pub enum NodeType {
     Gain { level: u32 },
+    Save { level: u32 },
     Blocker { is_blocked: bool },
 }
 
@@ -106,7 +107,7 @@ pub fn save(
         nodes.push(SavedNode {
             pos: transform.translation.truncate(),
             node_type: match gain {
-                Some(g) => NodeType::Gain { level: g.0 },
+                Some(g) => NodeType::Gain { level: g.level },
                 None => NodeType::Blocker {
                     is_blocked: self_status.is_blocked,
                 },
@@ -215,6 +216,20 @@ fn load_system(
                     commands.entity(*e_node).insert(blockers);
                     commands.entity(*e_node).insert(to_block);
                 }
+                NodeType::Save { level } => {
+                    insert_node(
+                        &mut commands,
+                        map_assets.mesh_gain.clone(),
+                        &map_assets,
+                        &highlights,
+                        loading_node.0.pos,
+                        loading_node.0.timer_seconds_duration,
+                        *e_node,
+                    );
+                    commands.entity(*e_node).insert(NodeSave { level });
+                    commands.entity(*e_node).insert(blockers);
+                    commands.entity(*e_node).insert(to_block);
+                }
                 NodeType::Gain { level } => {
                     insert_node(
                         &mut commands,
@@ -225,7 +240,7 @@ fn load_system(
                         loading_node.0.timer_seconds_duration,
                         *e_node,
                     );
-                    commands.entity(*e_node).insert(NodeCurrencyGain(level));
+                    commands.entity(*e_node).insert(NodeCurrencyGain { level });
 
                     commands.entity(*e_node).insert(blockers);
                     commands.entity(*e_node).insert(to_block);

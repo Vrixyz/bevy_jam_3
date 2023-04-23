@@ -7,6 +7,11 @@ pub struct Progress {
     pub timer: Timer,
 }
 
+#[derive(Component, Debug)]
+pub struct NodeTextValidate {
+    pub text: String,
+}
+
 pub fn update_progress_timer(
     time: Res<Time>,
     mut q_timer: Query<(
@@ -49,6 +54,7 @@ pub fn update_progress_text(
             &InheritedBlockStatus,
             &SelfBlockStatus,
             Option<&NodeManualBlockToggle>,
+            Option<&NodeTextValidate>,
         ),
         Or<(Changed<Progress>, Changed<InheritedBlockStatus>)>,
     >,
@@ -58,7 +64,7 @@ pub fn update_progress_text(
             Err(_) => {
                 t.sections[0].value = "error".into();
             }
-            Ok((p, status, self_status, manual_toggle)) => {
+            Ok((p, status, self_status, manual_toggle, text_validate)) => {
                 if status.is_blocked {
                     t.sections[0].value = "Blocked".to_string();
                     continue;
@@ -71,7 +77,7 @@ pub fn update_progress_text(
                             "Block"
                         }
                     } else {
-                        "Gain!"
+                        text_validate.map_or("???", |t| &t.text)
                     };
                     t.sections[0].value = text.to_string();
                 } else {

@@ -2,9 +2,12 @@ use bevy::prelude::*;
 use bevy::sprite::{MaterialMesh2dBundle, Mesh2dHandle};
 use bevy_easings::{Ease, EaseMethod, EasingType};
 use bevy_mod_picking::PickableBundle;
+use rand::distributions::WeightedIndex;
+use rand::prelude::Distribution;
 use rand::thread_rng;
 use rand_chacha::ChaCha20Rng;
 
+use crate::persisted_game::NodeType;
 use crate::{picking::AutoClick, picking::HighlightingMaterials, picking_aabb::HalfExtents, *};
 
 pub const TIMER_BLOCKER_MULT: f32 = 0.2f32; // / 10000f32;
@@ -225,53 +228,97 @@ pub fn new_button(
         ) {
             None => {}
             Some(pos) => {
-                let mut random_number = random_map.random.gen::<u32>() % 100;
-                let chance_to_no_room = if currencies.amount <= 1 { 0 } else { 30 };
-                if random_number < chance_to_no_room {
-                    continue;
-                }
-                random_number -= chance_to_no_room;
-                existing_points.push(pos);
-                // 70 weight left?
-
-                let _node = if random_number < 50 {
-                    let node = create_node(
-                        &mut commands,
-                        map_assets.mesh_blocker.clone(),
-                        &map_assets,
-                        &highlights,
-                        Vec2::new(pos.0, pos.1),
-                        event.0 .1 as f32 * TIMER_BLOCKER_MULT,
-                    );
-                    commands
-                        .entity(node)
-                        .insert(NodeManualBlockToggle { is_blocked: false })
-                        .insert(SelfBlockStatus { is_blocked: false });
-                    if let Ok(mut blockers) = q_blockers.get_mut(entity_from) {
-                        blockers.0.entities.push(node);
-                    } else {
-                        commands.entity(entity_from).insert(Blockers {
-                            entities: vec![node],
-                        });
+                let choices = [
+                    None,
+                    Some(NodeType::Blocker { is_blocked: true }),
+                    Some(NodeType::Save { level: 1 }),
+                    Some(NodeType::Gain { level: 1 }),
+                ];
+                let weights = [if currencies.amount <= 1 { 0 } else { 30 }, 50, 5, 20];
+                let dist = WeightedIndex::new(&weights).unwrap();
+                match choices[dist.sample(&mut random_map.random)] {
+                    Some(NodeType::Blocker { is_blocked }) => {
+                        create_blocker(
+                            &mut commands,
+                            &map_assets,
+                            &highlights,
+                            Vec2::new(pos.0, pos.1),
+                            event.0 .1 as f32 * TIMER_BLOCKER_MULT,
+                            &mut q_blockers,
+                            entity_from,
+                            is_blocked,
+                        );
+                        existing_points.push(pos);
                     }
+                    Some(NodeType::Save { level }) => {
+                        let node = create_node(
+                            &mut commands,
+                            map_assets.mesh_save.clone(),
+                            &map_assets,
+                            &highlights,
+                            Vec2::new(pos.0, pos.1),
+                            event.0 .1 as f32 * TIMER_GAIN_MULT + TIMER_GAIN_MULT_PER_LEVEL,
+                        );
+                        commands.entity(node).insert(NodeTextValidate {
+                            text: "Save".to_string(),
+                        });
+                        commands.entity(node).insert(NodeSave { level });
+                        existing_points.push(pos);
+                    }
+                    Some(NodeType::Gain { level }) => {
+                        let node = create_node(
+                            &mut commands,
+                            map_assets.mesh_gain.clone(),
+                            &map_assets,
+                            &highlights,
+                            Vec2::new(pos.0, pos.1),
+                            event.0 .1 as f32 * TIMER_GAIN_MULT + TIMER_GAIN_MULT_PER_LEVEL,
+                        );
 
-                    commands.entity(node).insert(ToBlock {
-                        entities: vec![entity_from],
-                    });
-                    node
-                } else {
-                    let node = create_node(
-                        &mut commands,
-                        map_assets.mesh_gain.clone(),
-                        &map_assets,
-                        &highlights,
-                        Vec2::new(pos.0, pos.1),
-                        event.0 .1 as f32 * TIMER_GAIN_MULT + TIMER_GAIN_MULT_PER_LEVEL,
-                    );
-                    commands.entity(node).insert(NodeCurrencyGain(1));
-                    node
-                };
+                        commands.entity(node).insert(NodeTextValidate {
+                            text: "Gain!".to_string(),
+                        });
+                        commands.entity(node).insert(NodeCurrencyGain { level });
+                        existing_points.push(pos);
+                    }
+                    None => {}
+                }
             }
         }
     }
+}
+
+fn create_blocker(
+    commands: &mut Commands,
+    map_assets: &Res<MapAssets>,
+    highlights: &Res<HighlightingMaterials>,
+    pos: Vec2,
+    duration: f32,
+    q_blockers: &mut Query<(&mut Blockers, Entity), With<BaseNode>>,
+    entity_from: Entity,
+    is_blocked: bool,
+) -> Entity {
+    let node = create_node(
+        commands,
+        map_assets.mesh_blocker.clone(),
+        map_assets,
+        highlights,
+        pos,
+        duration,
+    );
+    commands
+        .entity(node)
+        .insert(NodeManualBlockToggle { is_blocked })
+        .insert(SelfBlockStatus { is_blocked });
+    if let Ok(mut blockers) = q_blockers.get_mut(entity_from) {
+        blockers.0.entities.push(node);
+    } else {
+        commands.entity(entity_from).insert(Blockers {
+            entities: vec![node],
+        });
+    }
+    commands.entity(node).insert(ToBlock {
+        entities: vec![entity_from],
+    });
+    node
 }

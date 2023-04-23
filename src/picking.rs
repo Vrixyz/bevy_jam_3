@@ -42,7 +42,49 @@ pub fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>
     commands.insert_resource(res);
 }
 
-pub fn button_react(
+pub fn node_save_react(
+    mut events: EventReader<PointerEvent<Down>>,
+    mut q_nodes: Query<(&mut Progress, &mut NodeSave, &InheritedBlockStatus)>,
+) {
+    for event in events.iter() {
+        let e = event.target();
+        let Ok((mut p, mut node, status)) = q_nodes.get_mut(e) else {
+            continue;
+        };
+        if status.is_blocked {
+            continue;
+        }
+        if p.timer.finished() {
+            p.timer.reset();
+        } else {
+            //dbg!("NOT READY");
+        }
+    }
+}
+
+pub fn node_manual_toggle_block_react(
+    mut events: EventReader<PointerEvent<Down>>,
+    mut q_nodes: Query<(&Progress, &mut NodeManualBlockToggle, &InheritedBlockStatus)>,
+) {
+    for event in events.iter() {
+        let e = event.target();
+        let Ok((p, mut node, status)) = q_nodes.get_mut(e) else {
+            continue;
+        };
+        if status.is_blocked {
+            //dbg!("node is blocked");
+            continue;
+        }
+        if p.timer.finished() {
+            //dbg!("toggle block!");
+            node.is_blocked = !node.is_blocked;
+        } else {
+            //dbg!("NOT READY");
+        }
+    }
+}
+
+pub fn node_gain_react(
     mut events: EventReader<PointerEvent<Down>>,
     mut events_writer: EventWriter<NewNodeEvent>,
     mut events_reset_writer: EventWriter<PropagateResetManualButtons>,
@@ -55,14 +97,13 @@ pub fn button_react(
                 continue;
             };
         if !status.is_blocked && p.timer.finished() {
-            //dbg!("GAIN!");
             currencies.amount += 1;
             let new_time_duration = currencies.amount as f32 * TIMER_GAIN_MULT
-                + TIMER_GAIN_MULT_PER_LEVEL * gain.0 as f32;
+                + TIMER_GAIN_MULT_PER_LEVEL * gain.level as f32;
             p.timer
                 .set_duration(Duration::from_secs_f32(new_time_duration));
             p.timer.reset();
-            gain.0 += 1;
+            gain.level += 1;
             events_writer.send(NewNodeEvent((e, currencies.amount)));
             events_reset_writer.send(PropagateResetManualButtons(e));
         } else {
