@@ -3,6 +3,8 @@ use bevy_pkv::PkvStore;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    currency,
+    idle_gains::Currency,
     new_node::{insert_node, BaseNode, EyeCatcher},
     picking::HighlightingMaterials,
     progress::{NodeTextValidate, Progress},
@@ -16,7 +18,7 @@ impl Plugin for GameLoader {
     fn build(&self, app: &mut App) {
         app.insert_resource(PkvStore::new("sidleffect", "save"));
         app.register_type::<LoadingNode>();
-        app.register_type::<LoadingNodes>();
+        app.register_type::<LoadingPending>();
         app.add_event::<EventSave>();
         app.add_system(load_system.in_base_set(CoreSet::PreUpdate));
         app.add_system(save_event);
@@ -49,12 +51,14 @@ pub struct SavedNode {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Save {
+    pub currencies: i32,
     pub last_tick_time_since2023: f32,
     pub nodes: Vec<SavedNode>,
 }
 
 pub fn load(pkv: &Res<PkvStore>) -> Result<Save, String> {
     let get_default_save = || Save {
+        currencies: 0,
         last_tick_time_since2023: 2f32,
         nodes: vec![
             SavedNode {
@@ -91,6 +95,7 @@ pub fn save_cheat(mut evt: EventWriter<EventSave>) {
 }
 
 pub fn save_event(
+    currencies: Res<Currency>,
     q_nodes: Query<
         (
             Entity,
@@ -141,6 +146,7 @@ pub fn save_event(
         });
     }
     let data = Save {
+        currencies: currencies.amount,
         last_tick_time_since2023: 2f32,
         nodes,
     };
@@ -154,14 +160,20 @@ pub struct LoadingNode(pub SavedNode);
 
 /// To find LoadingNode indices corresponding entities
 #[derive(Reflect, Component)]
-pub struct LoadingNodes(pub Vec<Entity>);
+pub struct LoadingPending {
+    pub currencies: i32,
+    pub nodes: Vec<Entity>,
+}
 
 pub fn start_load(commands: &mut Commands, save: &Save) {
     let mut node_entities_index: Vec<Entity> = Vec::new();
     for n in &save.nodes {
         node_entities_index.push(commands.spawn(LoadingNode((*n).clone())).id());
     }
-    commands.spawn(LoadingNodes(node_entities_index));
+    commands.spawn(LoadingPending {
+        currencies: save.currencies,
+        nodes: node_entities_index,
+    });
 }
 
 fn clear(
@@ -178,13 +190,14 @@ fn clear(
 
 fn load_system(
     mut commands: Commands,
+    mut currency: ResMut<Currency>,
     map_assets: Res<MapAssets>,
     highlights: Res<HighlightingMaterials>,
-    q_loading_nodes: Query<(Entity, &LoadingNodes)>,
+    q_loading_nodes: Query<(Entity, &LoadingPending)>,
     q_individual_node: Query<&LoadingNode>,
     q_old_nodes: Query<(Entity, Option<&EyeCatcher>), Or<(With<ButtonRef>, With<BaseNode>)>>,
 ) {
-    for (e_loading, loading_nodes) in q_loading_nodes.iter() {
+    for (e_loading, loading_pending) in q_loading_nodes.iter() {
         for (e_old, eye) in q_old_nodes.iter() {
             if let Some(eye) = eye {
                 commands.entity(eye.0).despawn();
@@ -192,14 +205,15 @@ fn load_system(
             commands.entity(e_old).despawn();
         }
         dbg!("removed all");
-        for e_node in loading_nodes.0.iter() {
+        currency.amount = loading_pending.currencies;
+        for e_node in loading_pending.nodes.iter() {
             let loading_node = q_individual_node.get(*e_node).unwrap();
             let blockers = Blockers {
                 entities: loading_node
                     .0
                     .blockers
                     .iter()
-                    .map(|index| loading_nodes.0[*index])
+                    .map(|index| loading_pending.nodes[*index])
                     .collect(),
             };
             let to_block = ToBlock {
@@ -207,7 +221,7 @@ fn load_system(
                     .0
                     .to_block
                     .iter()
-                    .map(|index| loading_nodes.0[*index])
+                    .map(|index| loading_pending.nodes[*index])
                     .collect(),
             };
             match loading_node.0.node_type {
