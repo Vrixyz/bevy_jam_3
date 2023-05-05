@@ -17,6 +17,7 @@ use bevy_mod_picking::prelude::*;
 use bevy_pancam::{PanCam, PanCamPlugin};
 use bevy_pkv::PkvStore;
 use bevy_prototype_debug_lines::{DebugLines, DebugLinesPlugin};
+use currency::CurrencyPlugin;
 use idle_gains::Currency;
 use new_node::*;
 use persisted_game::GameLoader;
@@ -24,6 +25,7 @@ use poisson::Poisson;
 use progress::Progress;
 use rand::{Rng, SeedableRng};
 
+mod currency;
 mod idle_gains;
 mod new_node;
 pub mod persisted_game;
@@ -57,6 +59,7 @@ fn main() {
         }))
         .add_plugins(DefaultPickingPlugins) // <- Adds picking, interaction, and highlighting
         .add_plugin(GameLoader)
+        .add_plugin(CurrencyPlugin)
         .add_plugin(WorldInspectorPlugin::new())
         .add_plugin(AabbBackend)
         //.add_plugin(DebugEventsPickingPlugin) // <- Adds debug event logging.
