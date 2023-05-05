@@ -1,3 +1,4 @@
+use crate::persisted_game::EventSave;
 use crate::*;
 
 use bevy::utils::Uuid;
@@ -45,6 +46,8 @@ pub fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>
 pub fn node_save_react(
     mut events: EventReader<PointerEvent<Down>>,
     mut q_nodes: Query<(&mut Progress, &mut NodeSave, &InheritedBlockStatus)>,
+    mut event_save: EventWriter<EventSave>,
+    currency: Res<Currency>,
 ) {
     for event in events.iter() {
         let e = event.target();
@@ -55,7 +58,14 @@ pub fn node_save_react(
             continue;
         }
         if p.timer.finished() {
+            p.timer.set_duration(Duration::from_secs_f32(
+                TIMER_SAVE_BASE
+                    + node.level as f32 * TIMER_SAVE_MULT_PER_LEVEL
+                    + (currency.amount as f32 * TIMER_SAVE_ADD_MULT_PER_CURRENCY),
+            ));
             p.timer.reset();
+            node.level += 1;
+            event_save.send(EventSave);
         } else {
             //dbg!("NOT READY");
         }
@@ -104,7 +114,10 @@ pub fn node_gain_react(
                 .set_duration(Duration::from_secs_f32(new_time_duration));
             p.timer.reset();
             gain.level += 1;
-            events_writer.send(NewNodeEvent((e, currencies.amount)));
+            events_writer.send(NewNodeEvent {
+                entity: e,
+                currencies_on_click: currencies.amount,
+            });
             events_reset_writer.send(PropagateResetManualButtons(e));
         } else {
             dbg!("NOT READY");

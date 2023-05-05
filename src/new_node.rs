@@ -10,12 +10,18 @@ use rand_chacha::ChaCha20Rng;
 use crate::persisted_game::NodeType;
 use crate::{picking::AutoClick, picking::HighlightingMaterials, picking_aabb::HalfExtents, *};
 
-pub const TIMER_BLOCKER_MULT: f32 = 0.2f32; // / 10000f32;
+pub const TIMER_BLOCKER_MULT: f32 = 0.5f32; // / 10000f32;
 pub const TIMER_RESET_BLOCKER_FIXED: f32 = 0.5f32; // / 1000f32;
 pub const TIMER_GAIN_MULT: f32 = 0.3f32; // / 100000f32;
 pub const TIMER_GAIN_MULT_PER_LEVEL: f32 = 2f32; // / 10000f32;
+pub const TIMER_SAVE_BASE: f32 = 5f32; // / 10000f32;
+pub const TIMER_SAVE_MULT_PER_LEVEL: f32 = 5f32; // / 10000f32;
+pub const TIMER_SAVE_ADD_MULT_PER_CURRENCY: f32 = 0.5f32; // / 10000f32;
 
-pub struct NewNodeEvent(pub (Entity, i32));
+pub struct NewNodeEvent {
+    pub entity: Entity,
+    pub currencies_on_click: i32,
+}
 
 #[derive(Component)]
 pub struct BaseNode;
@@ -45,10 +51,18 @@ pub fn create_node(
     highlights: &HighlightingMaterials,
     pos: Vec2,
     duration: f32,
+    elapsed_time: f32,
 ) -> Entity {
     let eye_catcher = commands.spawn(bundle_eye_catcher(map_assets, pos)).id();
     let ent = commands
-        .spawn(bundle_node(mesh, pos, highlights, eye_catcher, duration))
+        .spawn(bundle_node(
+            mesh,
+            pos,
+            highlights,
+            eye_catcher,
+            duration,
+            elapsed_time,
+        ))
         .id();
     commands.entity(eye_catcher).insert(AutoClick(ent));
     commands.spawn((
@@ -79,12 +93,20 @@ pub fn insert_node(
     highlights: &HighlightingMaterials,
     pos: Vec2,
     duration: f32,
+    elapsed_time: f32,
     entity: Entity,
 ) -> Entity {
     let eye_catcher = commands.spawn(bundle_eye_catcher(map_assets, pos)).id();
     let ent = commands
         .entity(entity)
-        .insert(bundle_node(mesh, pos, highlights, eye_catcher, duration))
+        .insert(bundle_node(
+            mesh,
+            pos,
+            highlights,
+            eye_catcher,
+            duration,
+            elapsed_time,
+        ))
         .id();
     commands.entity(eye_catcher).insert(AutoClick(ent));
     commands.spawn((
@@ -115,6 +137,7 @@ fn bundle_node(
     highlights: &HighlightingMaterials,
     eye_catcher: Entity,
     duration: f32,
+    elapsed_time: f32,
 ) -> (
     MaterialMesh2dBundle<ColorMaterial>,
     EyeCatcher,
@@ -140,7 +163,11 @@ fn bundle_node(
         EyeCatcher(eye_catcher),
         PickableBundle::default(),
         Progress {
-            timer: Timer::from_seconds(duration, TimerMode::Once),
+            timer: {
+                let mut timer = Timer::from_seconds(duration, TimerMode::Once);
+                timer.set_elapsed(Duration::from_secs_f32(elapsed_time));
+                timer
+            },
         },
         BaseNode,
         InheritedBlockStatus { is_blocked: false },
@@ -196,7 +223,6 @@ pub fn new_button(
     mut events: EventReader<NewNodeEvent>,
     q_nodes: Query<(&Transform, Entity), With<BaseNode>>,
     mut q_blockers: Query<(&mut Blockers, Entity), With<BaseNode>>,
-    currencies: Res<Currency>,
 ) {
     if events.is_empty() {
         return;
@@ -212,7 +238,7 @@ pub fn new_button(
 
     for event in events.iter() {
         let poisson = Poisson::new();
-        let entity_from = event.0 .0;
+        let entity_from = event.entity;
         let pos = q_nodes
             .get(entity_from)
             .expect("entity in event gain currency should be valid")
@@ -234,7 +260,16 @@ pub fn new_button(
                     Some(NodeType::Save { level: 1 }),
                     Some(NodeType::Gain { level: 1 }),
                 ];
-                let weights = [if currencies.amount <= 1 { 0 } else { 30 }, 50, 5, 20];
+                let weights = [
+                    if event.currencies_on_click <= 1 {
+                        0
+                    } else {
+                        30
+                    },
+                    50,
+                    5,
+                    20,
+                ];
                 let dist = WeightedIndex::new(&weights).unwrap();
                 match choices[dist.sample(&mut random_map.random)] {
                     Some(NodeType::Blocker { is_blocked }) => {
@@ -243,7 +278,7 @@ pub fn new_button(
                             &map_assets,
                             &highlights,
                             Vec2::new(pos.0, pos.1),
-                            event.0 .1 as f32 * TIMER_BLOCKER_MULT,
+                            event.currencies_on_click as f32 * TIMER_BLOCKER_MULT,
                             &mut q_blockers,
                             entity_from,
                             is_blocked,
@@ -257,7 +292,10 @@ pub fn new_button(
                             &map_assets,
                             &highlights,
                             Vec2::new(pos.0, pos.1),
-                            event.0 .1 as f32 * TIMER_GAIN_MULT + TIMER_GAIN_MULT_PER_LEVEL,
+                            TIMER_SAVE_BASE
+                                + (event.currencies_on_click as f32
+                                    * TIMER_SAVE_ADD_MULT_PER_CURRENCY),
+                            0f32,
                         );
                         commands.entity(node).insert(NodeTextValidate {
                             text: "Save".to_string(),
@@ -272,7 +310,9 @@ pub fn new_button(
                             &map_assets,
                             &highlights,
                             Vec2::new(pos.0, pos.1),
-                            event.0 .1 as f32 * TIMER_GAIN_MULT + TIMER_GAIN_MULT_PER_LEVEL,
+                            event.currencies_on_click as f32 * TIMER_GAIN_MULT
+                                + TIMER_GAIN_MULT_PER_LEVEL,
+                            0f32,
                         );
 
                         commands.entity(node).insert(NodeTextValidate {
@@ -305,6 +345,7 @@ fn create_blocker(
         highlights,
         pos,
         duration,
+        0f32,
     );
     commands
         .entity(node)

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     new_node::{insert_node, BaseNode, EyeCatcher},
     picking::HighlightingMaterials,
-    progress::Progress,
+    progress::{NodeTextValidate, Progress},
     Blockers, ButtonRef, MapAssets, NodeCurrencyGain, NodeManualBlockToggle, NodeSave,
     SelfBlockStatus, ToBlock,
 };
@@ -17,14 +17,16 @@ impl Plugin for GameLoader {
         app.insert_resource(PkvStore::new("sidleffect", "save"));
         app.register_type::<LoadingNode>();
         app.register_type::<LoadingNodes>();
+        app.add_event::<EventSave>();
         app.add_system(load_system.in_base_set(CoreSet::PreUpdate));
-        app.add_system(save.run_if(input_just_pressed(KeyCode::S)));
-        /*
+        app.add_system(save_event);
+        app.add_system(save_cheat.run_if(input_just_pressed(KeyCode::S)));
+
         app.add_system(
             clear
                 .in_base_set(CoreSet::PreUpdate)
                 .run_if(input_just_pressed(KeyCode::E)),
-        );*/
+        );
     }
 }
 
@@ -82,13 +84,20 @@ pub fn load(pkv: &Res<PkvStore>) -> Result<Save, String> {
     Ok(save)
 }
 
-pub fn save(
+pub struct EventSave;
+
+pub fn save_cheat(mut evt: EventWriter<EventSave>) {
+    evt.send(EventSave);
+}
+
+pub fn save_event(
     q_nodes: Query<
         (
             Entity,
             &Transform,
             &Progress,
             Option<&NodeCurrencyGain>,
+            Option<&NodeSave>,
             &SelfBlockStatus,
             &ToBlock,
             &Blockers,
@@ -96,19 +105,24 @@ pub fn save(
         With<BaseNode>,
     >,
     mut pkv: ResMut<PkvStore>,
+    evt: EventReader<EventSave>,
 ) {
+    if evt.is_empty() {
+        return;
+    }
     let mut node_entities_index: HashMap<Entity, usize> = HashMap::new();
-    for (i, (e, _, _, _, _, _, _)) in q_nodes.iter().enumerate() {
+    for (i, (e, _, _, _, _, _, _, _)) in q_nodes.iter().enumerate() {
         node_entities_index.insert(e, i);
     }
     let mut nodes = Vec::new();
 
-    for (_e, transform, progress, gain, self_status, to_block, blockers) in q_nodes.iter() {
+    for (_e, transform, progress, gain, save, self_status, to_block, blockers) in q_nodes.iter() {
         nodes.push(SavedNode {
             pos: transform.translation.truncate(),
-            node_type: match gain {
-                Some(g) => NodeType::Gain { level: g.level },
-                None => NodeType::Blocker {
+            node_type: match (gain, save) {
+                (Some(g), _) => NodeType::Gain { level: g.level },
+                (_, Some(save)) => NodeType::Save { level: save.level },
+                (None, None) => NodeType::Blocker {
                     is_blocked: self_status.is_blocked,
                 },
             },
@@ -205,8 +219,8 @@ fn load_system(
                         &highlights,
                         loading_node.0.pos,
                         loading_node.0.timer_seconds_duration,
+                        loading_node.0.timer_seconds_duration - loading_node.0.timer_seconds_left,
                         *e_node,
-                        // TODO: a way to set elapsed time
                     );
                     commands
                         .entity(*e_node)
@@ -219,13 +233,17 @@ fn load_system(
                 NodeType::Save { level } => {
                     insert_node(
                         &mut commands,
-                        map_assets.mesh_gain.clone(),
+                        map_assets.mesh_save.clone(),
                         &map_assets,
                         &highlights,
                         loading_node.0.pos,
                         loading_node.0.timer_seconds_duration,
+                        loading_node.0.timer_seconds_duration - loading_node.0.timer_seconds_left,
                         *e_node,
                     );
+                    commands.entity(*e_node).insert(NodeTextValidate {
+                        text: "Save".to_string(),
+                    });
                     commands.entity(*e_node).insert(NodeSave { level });
                     commands.entity(*e_node).insert(blockers);
                     commands.entity(*e_node).insert(to_block);
@@ -238,10 +256,14 @@ fn load_system(
                         &highlights,
                         loading_node.0.pos,
                         loading_node.0.timer_seconds_duration,
+                        loading_node.0.timer_seconds_duration - loading_node.0.timer_seconds_left,
                         *e_node,
                     );
                     commands.entity(*e_node).insert(NodeCurrencyGain { level });
 
+                    commands.entity(*e_node).insert(NodeTextValidate {
+                        text: "Gain!".to_string(),
+                    });
                     commands.entity(*e_node).insert(blockers);
                     commands.entity(*e_node).insert(to_block);
                 }

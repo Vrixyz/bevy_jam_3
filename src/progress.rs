@@ -41,7 +41,10 @@ pub fn update_progress_manual_auto_block(
     for (e, t, mut status) in q_timer.iter_mut() {
         if t.timer.just_finished() {
             status.is_blocked = true;
-            events_writer.send(NewNodeEvent((e, currencies.amount)));
+            events_writer.send(NewNodeEvent {
+                entity: e,
+                currencies_on_click: currencies.amount,
+            });
         }
     }
 }
