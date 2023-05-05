@@ -18,7 +18,9 @@ pub mod prelude {
 /// Adds picking support for [`Aabb`](bevy::Aabb)
 #[derive(Clone)]
 pub struct AabbBackend;
+
 impl PickingBackend for AabbBackend {}
+
 impl Plugin for AabbBackend {
     fn build(&self, app: &mut App) {
         app.add_system(half_extents_picking.in_set(PickSet::Backend));
@@ -40,7 +42,7 @@ pub fn half_extents_picking(
         &ComputedVisibility,
         Option<&FocusPolicy>,
     )>,
-    mut output: EventWriter<EntitiesUnderPointer>,
+    mut output: EventWriter<PointerHits>,
 ) {
     /*
     If
@@ -96,7 +98,7 @@ pub fn half_extents_picking(
                 blocked = contains_cursor && focus != Some(&FocusPolicy::Pass);
                 contains_cursor.then_some((
                     entity,
-                    PickData {
+                    HitData {
                         camera: camera_entity,
                         depth: global_position.z,
                         position: None,
@@ -106,7 +108,7 @@ pub fn half_extents_picking(
             })
             .collect::<Vec<_>>();
 
-        output.send(EntitiesUnderPointer {
+        output.send(PointerHits {
             pointer: *pointer,
             picks: over_list,
             order: 0,

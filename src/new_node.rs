@@ -149,7 +149,7 @@ fn bundle_node(
     Blockers,
     ToBlock,
     HalfExtents,
-    HighlightOverride<ColorMaterial>,
+    Highlight<ColorMaterial>,
 ) {
     (
         MaterialMesh2dBundle {

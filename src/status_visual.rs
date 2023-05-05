@@ -1,11 +1,9 @@
-use bevy::{prelude::*};
+use bevy::prelude::*;
 use bevy_picking_highlight::*;
 
 use crate::{
-    new_node::EyeCatcher,
-    picking::HighlightingMaterials,
-    progress::{Progress},
-    InheritedBlockStatus, NodeManualBlockToggle, SelfBlockStatus,
+    new_node::EyeCatcher, picking::HighlightingMaterials, progress::Progress, InheritedBlockStatus,
+    NodeManualBlockToggle, SelfBlockStatus,
 };
 
 pub fn update_status_visual(
@@ -15,7 +13,7 @@ pub fn update_status_visual(
         &Progress,
         &InheritedBlockStatus,
         Option<&NodeManualBlockToggle>,
-        &mut HighlightOverride<ColorMaterial>,
+        &mut Highlight<ColorMaterial>,
         &EyeCatcher,
     )>,
     mut q_visibility: Query<&mut Visibility>,

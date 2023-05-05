@@ -57,13 +57,17 @@ fn main() {
             }),
             ..default()
         }))
-        .add_plugins(DefaultPickingPlugins) // <- Adds picking, interaction, and highlighting
+        .add_plugins(
+            DefaultPickingPlugins
+                .build()
+                .disable::<DebugPickingPlugin>(),
+        ) // <- Adds picking, interaction, and highlighting
         .add_plugin(GameLoader)
         .add_plugin(CurrencyPlugin)
-        .add_plugin(WorldInspectorPlugin::new())
         .add_plugin(AabbBackend)
+        //.add_plugin(WorldInspectorPlugin::new())
         //.add_plugin(DebugEventsPickingPlugin) // <- Adds debug event logging.
-        .add_plugin(LogDiagnosticsPlugin::default())
+        //.add_plugin(LogDiagnosticsPlugin::default())
         //.add_plugin(FrameTimeDiagnosticsPlugin::default())
         .add_plugin(PanCamPlugin::default())
         .add_plugin(DebugLinesPlugin::default())
@@ -184,7 +188,7 @@ fn setup(
     commands.spawn((
         Camera2dBundle::default(),
         PanCam::default(),
-        PickRaycastCamera::default(),
+        RaycastPickCamera::default(),
     ));
     dbg!("setup main");
     commands.spawn(TimerMaterials::new(&mut assets_timer, Color::GREEN, 180));

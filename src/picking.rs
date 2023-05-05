@@ -3,16 +3,16 @@ use crate::*;
 
 use bevy::utils::Uuid;
 
-use bevy_picking_core::backend::PickData;
 use bevy_picking_core::events::PointerEvent;
-use bevy_picking_highlight::*;
+use picking_core::backend::HitData;
+use picking_core::pointer::Location;
 
 #[derive(Resource)]
 pub struct HighlightingMaterials {
     pub mat_normal: Handle<ColorMaterial>,
     pub mat_blocked: Handle<ColorMaterial>,
-    pub node_materials_normal: HighlightOverride<ColorMaterial>,
-    pub node_materials_blocked: HighlightOverride<ColorMaterial>,
+    pub node_materials_normal: Highlight<ColorMaterial>,
+    pub node_materials_blocked: Highlight<ColorMaterial>,
 }
 
 pub fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>>) {
@@ -21,7 +21,7 @@ pub fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>
     let res = HighlightingMaterials {
         mat_normal: mat_initial.clone(),
         mat_blocked: mat_initial_blocked.clone(),
-        node_materials_normal: HighlightOverride {
+        node_materials_normal: Highlight {
             hovered: Some(HighlightKind::Fixed(
                 materials.add(ColorMaterial::from(Color::GRAY)),
             )),
@@ -30,7 +30,7 @@ pub fn setup(mut commands: Commands, mut materials: ResMut<Assets<ColorMaterial>
             )),
             selected: Some(HighlightKind::Fixed(mat_initial.clone())),
         },
-        node_materials_blocked: HighlightOverride {
+        node_materials_blocked: Highlight {
             hovered: Some(HighlightKind::Fixed(
                 materials.add(ColorMaterial::from(Color::DARK_GRAY)),
             )),
@@ -50,7 +50,7 @@ pub fn node_save_react(
     currency: Res<Currency>,
 ) {
     for event in events.iter() {
-        let e = event.target();
+        let e = event.target;
         let Ok((mut p, mut node, status)) = q_nodes.get_mut(e) else {
             continue;
         };
@@ -77,7 +77,7 @@ pub fn node_manual_toggle_block_react(
     mut q_nodes: Query<(&Progress, &mut NodeManualBlockToggle, &InheritedBlockStatus)>,
 ) {
     for event in events.iter() {
-        let e = event.target();
+        let e = event.target;
         let Ok((p, mut node, status)) = q_nodes.get_mut(e) else {
             continue;
         };
@@ -102,7 +102,7 @@ pub fn node_gain_react(
     mut currencies: ResMut<Currency>,
 ) {
     for event in events.iter() {
-        let e = event.target();
+        let e = event.target;
         let Ok((mut p, status, mut gain)) = q_timer.get_mut(e) else {
                 continue;
             };
@@ -135,11 +135,15 @@ pub fn auto_click(
     for (v, auto_click) in q_autoclick.iter() {
         if v == Visibility::Visible {
             events.send(PointerEvent::<Down>::new(
-                &PointerId::Custom(Uuid::new_v4()),
-                &auto_click.0,
+                PointerId::Custom(Uuid::new_v4()),
+                Location {
+                    target: bevy::render::camera::NormalizedRenderTarget::Image(Handle::default()),
+                    position: Vec2::default(),
+                },
+                auto_click.0,
                 Down {
                     button: PointerButton::Primary,
-                    pick_data: PickData {
+                    hit: HitData {
                         camera: Entity::PLACEHOLDER,
                         depth: 1f32,
                         position: None,
